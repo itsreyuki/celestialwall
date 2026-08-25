@@ -1,5 +1,6 @@
 const express = require('express');
 const passport = require('passport');
+const { saveUser } = require('../db');
 
 const router = express.Router();
 const guildId = process.env.DISCORD_GUILD_ID;
@@ -37,6 +38,7 @@ router.get('/discord/callback', passport.authenticate('discord', {
       avatar: req.user.avatar,
       isMember
     };
+    await saveUser(req.session.user);
 
     return req.session.save((error) => {
       if (error) return next(error);
@@ -69,6 +71,7 @@ router.post('/check-membership', async (req, res) => {
   try {
     const isMember = await checkGuildMembership(req.session.discordAccessToken);
     req.session.user.isMember = isMember;
+    await saveUser(req.session.user);
 
     return req.session.save((error) => {
       if (error) return res.status(500).json({ error: 'تعذر حفظ حالة العضوية.' });

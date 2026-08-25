@@ -5,9 +5,10 @@ const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
+const pgSession = require('connect-pg-simple')(session);
 const { Server } = require('socket.io');
 const passport = require('./config/passport');
-const { initCanvasDatabase, getCanvasState, saveCanvasState } = require('./db');
+const { initCanvasDatabase, getDatabasePool, getCanvasState, saveCanvasState } = require('./db');
 
 const authRoutes = require('./routes/auth');
 const apiRoutes = require('./routes/api');
@@ -16,6 +17,7 @@ const app = express();
 const httpServer = http.createServer(app);
 const port = Number(process.env.PORT) || 3000;
 const sessionSecret = process.env.SESSION_SECRET || 'development-secret-change-me';
+const databasePool = getDatabasePool();
 
 const allowedOrigin = process.env.CLIENT_URL || `http://localhost:${port}`;
 
@@ -26,7 +28,7 @@ app.use(cors({
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: false }));
 
-const sessionMiddleware = session({
+const sessionOptions = {
   secret: sessionSecret,
   resave: false,
   saveUninitialized: false,
@@ -36,7 +38,17 @@ const sessionMiddleware = session({
     secure: process.env.NODE_ENV === 'production',
     maxAge: 1000 * 60 * 60 * 24 * 7
   }
-});
+};
+
+if (databasePool) {
+  sessionOptions.store = new pgSession({
+    pool: databasePool,
+    tableName: 'user_sessions',
+    createTableIfMissing: true
+  });
+}
+
+const sessionMiddleware = session(sessionOptions);
 
 app.use(sessionMiddleware);
 app.use(passport.initialize());
