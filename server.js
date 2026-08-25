@@ -64,6 +64,10 @@ app.use('/auth', authRoutes);
 app.use('/api/music', musicRoutes);
 app.use('/api', apiRoutes);
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
+app.use('/uploads/music', express.static(path.join(__dirname, 'data', 'music'), {
+  fallthrough: false,
+  maxAge: process.env.NODE_ENV === 'production' ? '7d' : 0
+}));
 app.use('/vendor/fabric', express.static(path.join(__dirname, 'node_modules', 'fabric', 'dist')));
 app.use('/vendor/socket.io', express.static(path.join(__dirname, 'node_modules', 'socket.io-client', 'dist')));
 app.use(express.static(path.join(__dirname, 'public')));

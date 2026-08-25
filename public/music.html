@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#110b1b" />
-    <meta name="description" content="شباك الموسيقى من مجتمع سيليستيا — استمع إلى اختيارات الأعضاء واكتشف أغانيهم." />
+    <meta name="description" content="شباك الموسيقى من مجتمع سيليستيا — استمع إلى المقاطع التي شاركها الأعضاء." />
     <meta name="robots" content="index, follow" />
     <title>شباك الموسيقى | CELESTIAL WALL</title>
     <link rel="icon" type="image/png" href="/assets/logo.png" />
@@ -39,43 +39,45 @@
       <section class="music-hero">
         <span class="pill"><i></i> اختيارات مجتمع سيليستيا</span>
         <h1>شباك <span>الموسيقى.</span></h1>
-        <p>مساحة صغيرة للاستماع إلى الأغاني التي تركها أعضاء سيليستيا خلفهم.</p>
+        <p>مساحة صغيرة للاستماع إلى المقاطع الأصلية والمرخّصة التي يشاركها أعضاء سيليستيا.</p>
       </section>
 
       <section id="music-member-gate" class="music-member-gate" hidden>
-        <span>يمكنك الاستماع كزائر. انضم إلى مجتمع سيليستيا وسجّل دخولك لتضيف أغنيتك.</span>
+        <span>يمكنك الاستماع كزائر. انضم إلى مجتمع سيليستيا وسجّل دخولك لتضيف مقطعك.</span>
         <a id="music-invite" href="https://discord.gg/celes" target="_blank" rel="noopener">انضم إلى سيليستيا</a>
       </section>
 
-      <section id="music-composer" class="music-composer" hidden>
+      <section id="music-composer" class="music-composer upload-composer" hidden>
         <div>
           <span class="music-kicker">أضف إلى المعرض</span>
-          <h2>ما الذي تستمع إليه اليوم؟</h2>
+          <h2>شارك مقطعك</h2>
+          <p class="music-upload-help">ارفع ملف صوت أو فيديو تملك حق نشره. سيُحوّل الصوت تلقائياً إلى MP3.</p>
         </div>
-        <div class="music-search-panel">
-          <form id="music-search-form" class="music-search-form">
-            <label for="music-search-query">ابحث في YouTube</label>
-            <div>
-              <input id="music-search-query" type="search" maxlength="100" autocomplete="off" placeholder="اسم الأغنية أو الفنان" required />
-              <button id="music-search-submit" type="submit">بحث</button>
-            </div>
-          </form>
-          <div id="music-search-results" class="music-search-results" hidden></div>
-          <div id="music-selected" class="music-selected" hidden></div>
-        </div>
-        <form id="music-form" class="music-form">
+        <form id="music-form" class="music-form upload-form" enctype="multipart/form-data">
           <label>
-            <span>تعليقك <em>اختياري</em></span>
+            <span>اسم الأغنية</span>
+            <input id="music-title" name="title" type="text" maxlength="120" autocomplete="off" placeholder="اكتب اسم الأغنية" required />
+          </label>
+          <label>
+            <span>ملف الصوت أو الفيديو</span>
+            <input id="music-media" name="media" type="file" accept="audio/*,video/mp4,video/webm,video/quicktime,video/x-matroska" required />
+          </label>
+          <label>
+            <span>غلاف الأغنية</span>
+            <input id="music-poster" name="poster" type="file" accept="image/jpeg,image/png,image/webp" required />
+          </label>
+          <label class="music-note-field">
+            <span>ملاحظتك <em>اختيارية</em></span>
             <textarea id="music-comment" name="comment" maxlength="500" rows="2" placeholder="لماذا اخترت هذه الأغنية؟"></textarea>
           </label>
-          <button id="music-submit" type="submit" disabled><span aria-hidden="true">+</span> اختر أغنية أولاً</button>
+          <button id="music-submit" type="submit"><span aria-hidden="true">+</span> أضف إلى الشباك</button>
+          <p id="music-form-notice" class="music-form-notice" hidden></p>
         </form>
-        <p id="music-form-notice" class="music-form-notice" hidden></p>
       </section>
 
       <section class="music-gallery-section" aria-labelledby="music-gallery-title">
         <div class="music-gallery-heading">
-          <div><span class="music-kicker">استمع مع المجتمع</span><h2 id="music-gallery-title">أغاني على السطر</h2></div>
+          <div><span class="music-kicker">استمع مع المجتمع</span><h2 id="music-gallery-title">أغانٍ على السطر</h2></div>
           <span id="music-count" class="music-count">0 أغنية</span>
         </div>
         <div id="music-gallery" class="music-gallery" aria-live="polite">
@@ -85,10 +87,8 @@
     </main>
 
     <aside id="music-player-dock" class="music-player-dock" hidden aria-label="المشغل الحالي"></aside>
-    <div id="music-preview-host" class="music-preview-host" aria-hidden="true"></div>
 
     <script src="/vendor/socket.io/socket.io.min.js"></script>
     <script src="/music.js"></script>
-    <script src="https://www.youtube.com/iframe_api" async></script>
   </body>
 </html>
