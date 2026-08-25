@@ -271,13 +271,15 @@ io.use((socket, next) => {
 
 io.on('connection', (socket) => {
   const user = socket.request.session?.user || socket.request.user;
-  const canUseWall = Boolean(user?.isMember);
+  const isGuestView = socket.handshake.auth?.viewOnly === true || socket.handshake.auth?.viewOnly === 'true';
+  const canUseWall = Boolean(user?.isMember) && !isGuestView;
   if (canUseWall) {
     connectedUsers.add(socket.id);
   }
 
   socket.emit('session', {
     authenticated: canUseWall,
+    viewOnly: isGuestView,
     user: canUseWall ? { id: user.id, username: user.username, avatar: user.avatar } : null,
     connectedUsers: connectedUsers.size
   });

@@ -24,6 +24,8 @@ const discordInvite = document.querySelector('#discord-invite');
 const checkMembershipButton = document.querySelector('#check-membership');
 const membershipNotice = document.querySelector('#membership-notice');
 const canvasWrap = document.querySelector('.canvas-wrap');
+const guestViewNotice = document.querySelector('#guest-view-notice');
+const isGuestView = new URLSearchParams(window.location.search).get('view') === 'guest';
 
 let currentUser = null;
 let wallCanvas = null;
@@ -213,7 +215,7 @@ function updateCanvasWrapSize() {
 }
 
 function ensureHorizontalPanRoom() {
-  if (!wallCanvas || !canvasViewport.clientWidth) return;
+  if (isGuestView || !wallCanvas || !canvasViewport.clientWidth) return;
   const styles = getComputedStyle(canvasViewport);
   const padding = (Number.parseFloat(styles.paddingLeft) || 0) + (Number.parseFloat(styles.paddingRight) || 0);
   const minimumWidth = Math.ceil(canvasViewport.clientWidth - padding + 480);
@@ -319,7 +321,7 @@ function serializeObject(object) {
 }
 
 function syncObject(object) {
-  if (!socket || applyingRemoteChange || suppressCanvasSync || object.type === 'path') return;
+  if (isGuestView || !socket || applyingRemoteChange || suppressCanvasSync || object.type === 'path') return;
   const serializedObject = serializeObject(object);
   socket.emit('add-object', {
     objectType: object.type,
@@ -329,12 +331,12 @@ function syncObject(object) {
 }
 
 function syncObjectUpdate(object) {
-  if (!socket || applyingRemoteChange || suppressCanvasSync || !object?.metadata?.objectId) return;
+  if (isGuestView || !socket || applyingRemoteChange || suppressCanvasSync || !object?.metadata?.objectId) return;
   socket.emit('update-object', { object: serializeObject(object) });
 }
 
 function syncObjectRemoval(object) {
-  if (!socket || applyingRemoteChange || suppressCanvasSync || !object?.metadata?.objectId) return;
+  if (isGuestView || !socket || applyingRemoteChange || suppressCanvasSync || !object?.metadata?.objectId) return;
   socket.emit('remove-object', { objectId: object.metadata.objectId });
 }
 
@@ -539,7 +541,7 @@ function unhoverObject(object) {
 function initializeCollaboration() {
   if (socket || typeof window.io !== 'function') return;
 
-  socket = window.io({ withCredentials: true });
+  socket = window.io({ withCredentials: true, auth: { viewOnly: isGuestView } });
 
   socket.on('session', (data) => {
     updatePresence(data.connectedUsers || 0, true);
@@ -711,6 +713,7 @@ function updateObjectInteractivity(selectable) {
 }
 
 function setTool(tool) {
+  if (isGuestView && tool !== 'pan') tool = 'pan';
   activeTool = tool;
   document.querySelectorAll('[data-tool]').forEach((button) => {
     button.classList.toggle('active', button.dataset.tool === tool);
@@ -735,6 +738,7 @@ function setTool(tool) {
 }
 
 function addTextAtCenter() {
+  if (isGuestView) return showNotice('وضع الزائر لا يسمح بإضافة محتوى. سجّل الدخول للمشاركة.');
   if (!wallCanvas) return;
   const center = visibleCanvasCenter();
   const text = addMetadata(new fabric.IText(TEXT_PLACEHOLDER, {
@@ -776,6 +780,7 @@ function addTextAtCenter() {
 }
 
 async function addImage(file) {
+  if (isGuestView) return showNotice('وضع الزائر لا يسمح بإضافة محتوى. سجّل الدخول للمشاركة.');
   if (!file || !wallCanvas) return;
   if (!file.type.startsWith('image/')) {
     showNotice('يرجى اختيار ملف صورة صالح.');
@@ -992,6 +997,7 @@ function initializeCanvas() {
 }
 
 function deleteSelected() {
+  if (isGuestView) return showNotice('وضع الزائر للعرض فقط.');
   if (!wallCanvas) return;
   const selectedObjects = wallCanvas.getActiveObjects();
   if (!selectedObjects.length) {
@@ -1013,6 +1019,7 @@ function deleteSelected() {
 }
 
 function clearCanvas() {
+  if (isGuestView) return showNotice('وضع الزائر للعرض فقط.');
   if (!wallCanvas) return;
   const ownedObjects = wallCanvas.getObjects().filter(isOwnedByCurrentUser);
   if (!ownedObjects.length) {
@@ -1033,7 +1040,22 @@ function clearCanvas() {
 async function loadSession() {
   const response = await fetch('/auth/me', { credentials: 'same-origin' });
   const data = await response.json();
-  currentUser = data.authenticated ? data.user : null;
+  currentUser = data.authenticated && !isGuestView ? data.user : null;
+
+  if (isGuestView) {
+    document.body.classList.add('guest-view');
+    loginView.hidden = true;
+    membershipGate.hidden = true;
+    workspace.hidden = false;
+    account.hidden = true;
+    guestViewNotice.hidden = false;
+    presence.hidden = false;
+    updatePresence(0, false);
+    initializeCanvas();
+    setTool('pan');
+    initializeCollaboration();
+    return;
+  }
 
   if (!currentUser) {
     loginView.hidden = false;

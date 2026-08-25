@@ -69,12 +69,18 @@
           <span class="pill"><i></i> تابع لمجتمع سيليستيا على الدسكورد discord.gg/celes</span>
           <h1>ارسم بصمتك على<br /><span>جدار سيليستيا.</span></h1>
           <p>لوحة مشتركة بسيطة ومرنة لترك بصمتك، إضافة النصوص والصور، وصناعة شيء جميل مع اصدقاءك.</p>
-          <a class="discord-button" href="/auth/discord">
-            <span class="discord-icon">◉</span>
-            تسجيل الدخول عبر Discord
-            <span class="button-arrow">←</span>
-          </a>
-          <small class="login-hint">تسجيل الدخول مطلوب لفتح اللوحة</small>
+          <div class="login-actions">
+            <a class="discord-button" href="/auth/discord">
+              <span class="discord-icon">◉</span>
+              تسجيل الدخول عبر Discord
+              <span class="button-arrow">←</span>
+            </a>
+            <a class="guest-button" href="/?view=guest">
+              <span aria-hidden="true">◌</span>
+              مشاهدة كزائر
+            </a>
+          </div>
+          <small class="login-hint">سجّل دخولك للمشاركة، أو شاهد الجدار كزائر فقط.</small>
         </div>
         <div class="hero-preview" aria-hidden="true">
           <div class="preview-window">
@@ -111,16 +117,16 @@
         <div class="canvas-card">
           <div class="toolbar" role="toolbar" aria-label="أدوات الرسم">
             <div class="tool-group">
-              <button class="tool-button active" data-tool="draw" type="button" title="قلم رصاص" aria-label="قلم رصاص">
+              <button class="tool-button active member-control" data-tool="draw" type="button" title="قلم رصاص" aria-label="قلم رصاص">
                 <span class="tool-icon">✎</span><span class="tool-label">قلم</span>
               </button>
-              <button class="tool-button" data-tool="text" type="button" title="إضافة نص" aria-label="إضافة نص">
+              <button class="tool-button member-control" data-tool="text" type="button" title="إضافة نص" aria-label="إضافة نص">
                 <span class="tool-icon text-icon">T</span><span class="tool-label">نص</span>
               </button>
-              <button class="tool-button" id="image-tool" data-tool="image" type="button" title="إضافة صورة" aria-label="إضافة صورة">
+              <button class="tool-button member-control" id="image-tool" data-tool="image" type="button" title="إضافة صورة" aria-label="إضافة صورة">
                 <span class="tool-icon">▧</span><span class="tool-label">صورة</span>
               </button>
-              <button class="tool-button" data-tool="select" type="button" title="تحديد وتحريك" aria-label="تحديد وتحريك">
+              <button class="tool-button member-control" data-tool="select" type="button" title="تحديد وتحريك" aria-label="تحديد وتحريك">
                 <span class="tool-icon">⌖</span><span class="tool-label">تحديد</span>
               </button>
               <button class="tool-button" data-tool="pan" type="button" title="تحريك اللوحة" aria-label="تحريك اللوحة">
@@ -131,15 +137,15 @@
                 <output id="zoom-level" aria-live="polite">100%</output>
                 <button class="zoom-button" id="zoom-in" type="button" title="تكبير" aria-label="تكبير">+</button>
               </div>
-              <button class="tool-button delete-tool" id="delete-selected" type="button" title="حذف المحدد" aria-label="حذف المحدد">
+              <button class="tool-button delete-tool member-control" id="delete-selected" type="button" title="حذف المحدد" aria-label="حذف المحدد">
                 <span class="tool-icon">⌫</span><span class="tool-label">حذف</span>
               </button>
-              <input id="image-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+              <input id="image-input" class="member-control" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
             </div>
 
-            <div class="toolbar-divider"></div>
+            <div class="toolbar-divider member-control"></div>
 
-            <label class="control control-color" title="لون الرسم والكتابة">
+            <label class="control control-color member-control" title="لون الرسم والكتابة">
               <select id="brush-color" aria-label="لون الرسم والكتابة">
                 <option value="#ffffff">أبيض</option>
                 <option value="#c4b5fd" selected>ليلكي</option>
@@ -151,14 +157,18 @@
               </select>
               <span>اللون</span>
             </label>
-            <label class="control control-range" title="حجم القلم">
+            <label class="control control-range member-control" title="حجم القلم">
               <span>الحجم</span>
               <input id="brush-width" type="range" min="1" max="30" value="5" />
             </label>
 
-            <button class="clear-button" id="clear-canvas" type="button" title="مسح اللوحة">
+            <button class="clear-button member-control" id="clear-canvas" type="button" title="مسح اللوحة">
               <span>⌫</span> مسح
             </button>
+            <div id="guest-view-notice" class="guest-view-notice" hidden>
+              <span>وضع الزائر — مشاهدة وتنقّل فقط</span>
+              <a href="/auth/discord">سجّل للمشاركة</a>
+            </div>
           </div>
 
           <div class="canvas-viewport">
