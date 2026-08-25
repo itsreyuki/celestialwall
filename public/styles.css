@@ -96,7 +96,7 @@ body { color: #fbf7ff; }
 .toolbar { margin: 10px; border-radius: 18px; background: linear-gradient(120deg, rgba(40, 27, 69, .96), rgba(28, 20, 49, .96)); }
 .tool-button, .clear-button, .zoom-button { min-height: 34px; }
 .tool-button:hover, .zoom-button:hover { transform: translateY(-1px); }
-.canvas-viewport { position: relative; background: radial-gradient(circle at 15% 5%, rgba(147, 95, 224, .14), transparent 34%), radial-gradient(circle at 85% 100%, rgba(229, 179, 67, .11), transparent 32%), #110c1b; scroll-behavior: smooth; }
+.canvas-viewport { position: relative; background: radial-gradient(circle at 15% 5%, rgba(147, 95, 224, .14), transparent 34%), radial-gradient(circle at 85% 100%, rgba(229, 179, 67, .11), transparent 32%), #110c1b; scroll-behavior: auto; }
 .canvas-viewport::before { position: absolute; z-index: 0; inset: 0; background-image: radial-gradient(rgba(255, 225, 144, .11) .7px, transparent .7px); background-size: 22px 22px; content: ""; opacity: .42; pointer-events: none; }
 .canvas-wrap { position: relative; z-index: 1; border: 1px solid rgba(255, 223, 138, .16); border-radius: 12px; box-shadow: 0 20px 55px rgba(0, 0, 0, .52), 0 0 0 1px rgba(135, 83, 217, .1); transition: box-shadow .22s ease, transform .22s ease; }
 .canvas-viewport.pan-ready .canvas-wrap { box-shadow: 0 20px 55px rgba(0, 0, 0, .55), 0 0 0 1px rgba(239, 196, 93, .35); }

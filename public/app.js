@@ -35,6 +35,8 @@ let activeTool = 'draw';
 let isPanning = false;
 let panStart = null;
 let temporaryPanTool = null;
+let pendingPan = null;
+let panAnimationFrame = null;
 let worldWidth = 1200;
 let worldHeight = 700;
 const EXPANSION_WIDTH = 800;
@@ -210,6 +212,15 @@ function updateCanvasWrapSize() {
   canvasWrap.style.minHeight = `${Math.round(worldHeight * zoom)}px`;
 }
 
+function ensureHorizontalPanRoom() {
+  if (!wallCanvas || !canvasViewport.clientWidth) return;
+  const styles = getComputedStyle(canvasViewport);
+  const padding = (Number.parseFloat(styles.paddingLeft) || 0) + (Number.parseFloat(styles.paddingRight) || 0);
+  const minimumWidth = Math.ceil(canvasViewport.clientWidth - padding + 480);
+  if (worldWidth >= minimumWidth) return;
+  expandWorld({ width: minimumWidth, height: worldHeight, shiftX: 0, shiftY: 0 });
+}
+
 function syncCanvasDimensions() {
   if (!wallCanvas) return;
   const zoom = wallCanvas.getZoom() || 1;
@@ -253,8 +264,8 @@ function expandWorld(payload = {}) {
 
   const width = Number(payload.width) || worldWidth + EXPANSION_WIDTH;
   const height = Number(payload.height) || worldHeight + EXPANSION_HEIGHT;
-  const shiftX = Number(payload.shiftX) || EXPANSION_WIDTH / 2;
-  const shiftY = Number(payload.shiftY) || EXPANSION_HEIGHT / 2;
+  const shiftX = Number.isFinite(Number(payload.shiftX)) ? Number(payload.shiftX) : EXPANSION_WIDTH / 2;
+  const shiftY = Number.isFinite(Number(payload.shiftY)) ? Number(payload.shiftY) : EXPANSION_HEIGHT / 2;
   if (width <= worldWidth && height <= worldHeight) return;
 
   wallCanvas.getObjects().forEach((object) => {
@@ -414,6 +425,11 @@ async function applySavedCanvasState(state) {
   } finally {
     applyingRemoteChange = false;
   }
+
+  // Keep a modest horizontal travel area even on very wide screens. This is
+  // deliberately done after the initial state has finished applying so the
+  // resulting world size is shared with the other connected members.
+  window.requestAnimationFrame(ensureHorizontalPanRoom);
 }
 
 function tooltipTextFor(object) {
@@ -819,16 +835,38 @@ function handleCanvasMouseDown(event) {
 function handleCanvasMouseMove(event) {
   if (!isPanning || !panStart) return;
   const point = pointerPosition(event.e);
+
+  pendingPan = {
+    x: point.x - panStart.x,
+    y: point.y - panStart.y
+  };
+
+  if (panAnimationFrame === null) {
+    panAnimationFrame = window.requestAnimationFrame(applyPendingPan);
+  }
+}
+
+function applyPendingPan() {
+  panAnimationFrame = null;
+  if (!isPanning || !panStart || !pendingPan) return;
+
   const maxScrollLeft = Math.max(0, canvasViewport.scrollWidth - canvasViewport.clientWidth);
   const maxScrollTop = Math.max(0, canvasViewport.scrollHeight - canvasViewport.clientHeight);
-  canvasViewport.scrollLeft = Math.max(0, Math.min(maxScrollLeft, panStart.scrollLeft - (point.x - panStart.x)));
-  canvasViewport.scrollTop = Math.max(0, Math.min(maxScrollTop, panStart.scrollTop - (point.y - panStart.y)));
+  canvasViewport.scrollLeft = Math.max(0, Math.min(maxScrollLeft, panStart.scrollLeft - pendingPan.x));
+  canvasViewport.scrollTop = Math.max(0, Math.min(maxScrollTop, panStart.scrollTop - pendingPan.y));
+  pendingPan = null;
 }
 
 function handleCanvasMouseUp() {
   if (!isPanning) return;
+  if (panAnimationFrame !== null) {
+    window.cancelAnimationFrame(panAnimationFrame);
+    panAnimationFrame = null;
+  }
+  applyPendingPan();
   isPanning = false;
   panStart = null;
+  pendingPan = null;
   canvasViewport.classList.remove('is-panning');
   if (activeTool === 'select') wallCanvas.selection = true;
 }
@@ -879,6 +917,8 @@ function handleTextChanged(target) {
 
 function initializeCanvas() {
   if (wallCanvas) return;
+  canvasViewport.setAttribute('dir', 'ltr');
+  canvasViewport.style.direction = 'ltr';
   wallCanvas = new fabric.Canvas(canvasElement, {
     width: 1200,
     height: 700,
