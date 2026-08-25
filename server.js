@@ -19,6 +19,10 @@ const port = Number(process.env.PORT) || 3000;
 const sessionSecret = process.env.SESSION_SECRET || 'development-secret-change-me';
 const databasePool = getDatabasePool();
 
+// Render terminates HTTPS at its proxy and forwards the request to Node over HTTP.
+// Trusting the proxy allows express-session to set secure cookies correctly.
+app.set('trust proxy', 1);
+
 const allowedOrigin = process.env.CLIENT_URL || `http://localhost:${port}`;
 
 app.use(cors({
@@ -30,6 +34,7 @@ app.use(express.urlencoded({ extended: false }));
 
 const sessionOptions = {
   secret: sessionSecret,
+  proxy: true,
   resave: false,
   saveUninitialized: false,
   cookie: {
