@@ -240,6 +240,11 @@ function removeRemoteObject(objectId) {
   }
 }
 
+function removeRemoteObjects(objectIds) {
+  if (!Array.isArray(objectIds)) return;
+  objectIds.forEach((objectId) => removeRemoteObject(objectId));
+}
+
 function queueRemoteChange(change) {
   remoteChangeQueue = remoteChangeQueue
     .then(change)
@@ -281,13 +286,6 @@ async function applySavedCanvasState(state) {
   } finally {
     applyingRemoteChange = false;
   }
-}
-
-function resetCanvas() {
-  wallCanvas.clear();
-  wallCanvas.backgroundColor = '#080b12';
-  wallCanvas.requestRenderAll();
-  hideObjectTooltip();
 }
 
 function tooltipTextFor(object) {
@@ -434,10 +432,13 @@ function initializeCollaboration() {
   socket.on('clear-canvas', (payload) => {
     if (isOwnSocketEvent(payload)) return;
     queueRemoteChange(async () => {
-      applyingRemoteChange = true;
-      resetCanvas();
-      applyingRemoteChange = false;
+      removeRemoteObjects(payload.objectIds);
     });
+  });
+
+  socket.on('permission-denied', ({ action }) => {
+    if (action === 'remove-object') showNotice('لا يمكنك حذف إضافة عضو آخر.');
+    if (action === 'update-object') showNotice('لا يمكنك تعديل إضافة عضو آخر.');
   });
 
   socket.on('canvas:expand', (payload) => {
@@ -461,6 +462,10 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+function isOwnedByCurrentUser(object) {
+  return object?.metadata?.userId && object.metadata.userId === currentUser?.id;
 }
 
 function avatarUrl(user) {
@@ -739,18 +744,34 @@ function deleteSelected() {
     return;
   }
 
+  const ownedObjects = selectedObjects.filter(isOwnedByCurrentUser);
+  if (!ownedObjects.length) {
+    showNotice('لا يمكنك حذف إضافات الأعضاء الآخرين.');
+    wallCanvas.discardActiveObject();
+    return;
+  }
+
   wallCanvas.discardActiveObject();
-  selectedObjects.forEach((object) => wallCanvas.remove(object));
+  ownedObjects.forEach((object) => wallCanvas.remove(object));
   wallCanvas.requestRenderAll();
 }
 
 function clearCanvas() {
   if (!wallCanvas) return;
-  if (!window.confirm('هل تريد مسح كل ما رسمته على اللوحة؟')) return;
+  const ownedObjects = wallCanvas.getObjects().filter(isOwnedByCurrentUser);
+  if (!ownedObjects.length) {
+    showNotice('لا توجد إضافات خاصة بك لمسحها.');
+    return;
+  }
+  if (!window.confirm('هل تريد مسح كل إضافاتك من اللوحة؟')) return;
+  const objectIds = ownedObjects.map((object) => object.metadata?.objectId).filter(Boolean);
   suppressCanvasSync = true;
-  resetCanvas();
+  wallCanvas.discardActiveObject();
+  ownedObjects.forEach((object) => wallCanvas.remove(object));
+  wallCanvas.requestRenderAll();
+  hideObjectTooltip();
   suppressCanvasSync = false;
-  if (socket) socket.emit('clear-canvas', { eventType: 'clear-canvas' });
+  if (socket && objectIds.length) socket.emit('clear-canvas', { eventType: 'clear-canvas', objectIds });
 }
 
 async function loadSession() {
@@ -821,6 +842,11 @@ document.addEventListener('keydown', (event) => {
   if (event.key !== 'Delete' || !wallCanvas || wallCanvas.getActiveObject()?.isEditing) return;
   const activeObject = wallCanvas.getActiveObject();
   if (activeObject) {
+    if (!isOwnedByCurrentUser(activeObject)) {
+      showNotice('لا يمكنك حذف إضافة عضو آخر.');
+      wallCanvas.discardActiveObject();
+      return;
+    }
     wallCanvas.remove(activeObject);
     wallCanvas.discardActiveObject();
     wallCanvas.requestRenderAll();

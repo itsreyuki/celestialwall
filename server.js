@@ -123,17 +123,39 @@ function appendUniqueObjects(state, objects) {
   });
 }
 
-function upsertObject(state, object) {
-  const objectId = object?.metadata?.objectId;
-  if (!objectId) return appendUniqueObjects(state, [object]);
-  const index = state.objects.findIndex((item) => item.metadata?.objectId === objectId);
-  if (index === -1) state.objects.push(object);
-  else state.objects[index] = object;
+function userMetadata(user) {
+  return {
+    userId: user.id,
+    username: user.username,
+    global_name: user.global_name || user.username
+  };
 }
 
-function removeObject(state, objectId) {
-  if (!objectId) return;
-  state.objects = state.objects.filter((object) => object.metadata?.objectId !== objectId);
+function ownedObject(object, user) {
+  const copy = structuredClone(object);
+  copy.metadata = { ...(copy.metadata || {}), ...userMetadata(user) };
+  return copy;
+}
+
+function ownedObjects(payload, user) {
+  return incomingObjects(payload)
+    .filter(Boolean)
+    .map((object) => ownedObject(object, user));
+}
+
+function removeObjectOwnedBy(state, objectId, userId) {
+  const index = state.objects.findIndex((object) => object.metadata?.objectId === objectId);
+  if (index === -1 || state.objects[index].metadata?.userId !== userId) return false;
+  state.objects.splice(index, 1);
+  return true;
+}
+
+function updateObjectOwnedBy(state, object, userId) {
+  const objectId = object?.metadata?.objectId;
+  const index = state.objects.findIndex((item) => item.metadata?.objectId === objectId);
+  if (!objectId || index === -1 || state.objects[index].metadata?.userId !== userId) return false;
+  state.objects[index] = object;
+  return true;
 }
 
 function broadcastPresence() {
@@ -175,36 +197,61 @@ io.on('connection', (socket) => {
 
   socket.on('draw', (payload) => {
     if (!canUseWall) return;
-    persistCanvasMutation((state) => appendUniqueObjects(state, incomingObjects(payload)))
-      .then(() => relayToOtherClients('draw', payload))
+    const objects = ownedObjects(payload, user);
+    if (!objects.length) return;
+    const safePayload = { ...payload, object: objects[0], objects };
+    persistCanvasMutation((state) => appendUniqueObjects(state, objects))
+      .then(() => relayToOtherClients('draw', safePayload))
       .catch((error) => console.error('Unable to persist draw:', error));
   });
 
   socket.on('add-object', (payload) => {
     if (!canUseWall) return;
-    persistCanvasMutation((state) => appendUniqueObjects(state, incomingObjects(payload)))
-      .then(() => relayToOtherClients('add-object', payload))
+    const objects = ownedObjects(payload, user);
+    if (!objects.length) return;
+    const safePayload = { ...payload, object: objects[0], objects };
+    persistCanvasMutation((state) => appendUniqueObjects(state, objects))
+      .then(() => relayToOtherClients('add-object', safePayload))
       .catch((error) => console.error('Unable to persist object:', error));
   });
 
   socket.on('update-object', (payload) => {
     if (!canUseWall || !payload?.object) return;
-    persistCanvasMutation((state) => upsertObject(state, payload.object))
-      .then(() => relayToOtherClients('update-object', payload))
+    const object = ownedObject(payload.object, user);
+    let updated = false;
+    persistCanvasMutation((state) => { updated = updateObjectOwnedBy(state, object, user.id); })
+      .then(() => {
+        if (!updated) return socket.emit('permission-denied', { action: 'update-object' });
+        return relayToOtherClients('update-object', { ...payload, object });
+      })
       .catch((error) => console.error('Unable to persist object update:', error));
   });
 
   socket.on('remove-object', (payload) => {
     if (!canUseWall || !payload?.objectId) return;
-    persistCanvasMutation((state) => removeObject(state, payload.objectId))
-      .then(() => relayToOtherClients('remove-object', payload))
+    let removed = false;
+    persistCanvasMutation((state) => { removed = removeObjectOwnedBy(state, payload.objectId, user.id); })
+      .then(() => {
+        if (!removed) return socket.emit('permission-denied', { action: 'remove-object' });
+        return relayToOtherClients('remove-object', payload);
+      })
       .catch((error) => console.error('Unable to persist object removal:', error));
   });
 
   socket.on('clear-canvas', (payload = {}) => {
     if (!canUseWall) return;
-    persistCanvasMutation((state) => { state.objects = []; })
-      .then(() => relayToOtherClients('clear-canvas', payload))
+    let objectIds = [];
+    persistCanvasMutation((state) => {
+      objectIds = state.objects
+        .filter((object) => object.metadata?.userId === user.id)
+        .map((object) => object.metadata?.objectId)
+        .filter(Boolean);
+      state.objects = state.objects.filter((object) => object.metadata?.userId !== user.id);
+    })
+      .then(() => {
+        if (!objectIds.length) return;
+        return relayToOtherClients('clear-canvas', { ...payload, objectIds });
+      })
       .catch((error) => console.error('Unable to persist clear:', error));
   });
 
