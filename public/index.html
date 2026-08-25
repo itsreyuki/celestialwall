@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#11152d" />
+    <title>جدار سيليستيا | CELESTIAL WALL</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+    <div class="bubble-field" aria-hidden="true">
+      <span class="bubble bubble-a"></span>
+      <span class="bubble bubble-b"></span>
+      <span class="bubble bubble-c"></span>
+      <span class="bubble bubble-d"></span>
+      <span class="bubble bubble-e"></span>
+      <span class="bubble bubble-f"></span>
+    </div>
+
+    <main class="page-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="العودة إلى الصفحة الرئيسية">
+          <span class="brand-mark"><img src="/assets/logo.png" alt="شعار سيليستيا" /></span>
+          <span>
+            <strong>جدار سيليستيا</strong>
+            <small>CELESTIAL WALL</small>
+          </span>
+        </a>
+
+        <div class="topbar-actions">
+          <div id="presence" class="presence" hidden>
+            <span id="presence-dot" class="presence-dot offline"></span>
+            <span id="presence-label">غير متصل</span>
+            <strong id="presence-count">0</strong>
+          </div>
+          <div id="account" class="account" hidden></div>
+        </div>
+      </header>
+
+      <section id="login-view" class="login-view">
+        <div class="hero-copy">
+          <span class="pill"><i></i> تابع لمجتمع سيليستيا على الدسكورد discord.gg/celes</span>
+          <h1>ارسم بصمتك على<br /><span>جدار سيليستيا.</span></h1>
+          <p>لوحة مشتركة بسيطة ومرنة لترك بصمتك، إضافة النصوص والصور، وصناعة شيء جميل مع اصدقاءك.</p>
+          <a class="discord-button" href="/auth/discord">
+            <span class="discord-icon">◉</span>
+            تسجيل الدخول عبر Discord
+            <span class="button-arrow">←</span>
+          </a>
+          <small class="login-hint">تسجيل الدخول مطلوب لفتح اللوحة</small>
+        </div>
+        <div class="hero-preview" aria-hidden="true">
+          <div class="preview-window">
+            <div class="preview-bar"><span></span><span></span><span></span></div>
+            <div class="preview-art">
+              <div class="preview-star">✦</div>
+              <div class="preview-orbit orbit-one"></div>
+              <div class="preview-orbit orbit-two"></div>
+              <div class="preview-note">your<br />space</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="membership-gate" class="membership-gate" hidden>
+        <div class="membership-card">
+          <div class="membership-logo"><img src="/assets/logo.png" alt="شعار سيليستيا" /></div>
+          <span class="pill"><i></i> عضوية سيليستيا مطلوبة</span>
+          <h1>انضم إلى مجتمع<br /><span>سيليستيا على Discord.</span></h1>
+          <p>هذه اللوحة متاحة لأعضاء مجتمع سيليستيا فقط. انضم إلى السيرفر ثم أعد التحقق لفتح الجدار.</p>
+          <div class="membership-actions">
+            <a id="discord-invite" class="discord-button" href="https://discord.gg/celes" target="_blank" rel="noopener">
+              <span class="discord-icon">◉</span>
+              انضم إلى سيرفر سيليستيا
+              <span class="button-arrow">←</span>
+            </a>
+            <button id="check-membership" class="check-membership-button" type="button">تحققت من الانضمام</button>
+          </div>
+          <p id="membership-notice" class="membership-notice" hidden></p>
+        </div>
+      </section>
+
+      <section id="workspace" class="workspace" hidden>
+        <div class="canvas-card">
+          <div class="toolbar" role="toolbar" aria-label="أدوات الرسم">
+            <div class="tool-group">
+              <button class="tool-button active" data-tool="draw" type="button" title="قلم رصاص" aria-label="قلم رصاص">
+                <span class="tool-icon">✎</span><span class="tool-label">قلم</span>
+              </button>
+              <button class="tool-button" data-tool="text" type="button" title="إضافة نص" aria-label="إضافة نص">
+                <span class="tool-icon text-icon">T</span><span class="tool-label">نص</span>
+              </button>
+              <button class="tool-button" id="image-tool" data-tool="image" type="button" title="إضافة صورة" aria-label="إضافة صورة">
+                <span class="tool-icon">▧</span><span class="tool-label">صورة</span>
+              </button>
+              <button class="tool-button" data-tool="select" type="button" title="تحديد وتحريك" aria-label="تحديد وتحريك">
+                <span class="tool-icon">⌖</span><span class="tool-label">تحديد</span>
+              </button>
+              <button class="tool-button" data-tool="pan" type="button" title="تحريك اللوحة" aria-label="تحريك اللوحة">
+                <span class="tool-icon">✥</span><span class="tool-label">تحريك</span>
+              </button>
+              <div class="zoom-controls" aria-label="أدوات التكبير والتصغير">
+                <button class="zoom-button" id="zoom-out" type="button" title="تصغير" aria-label="تصغير">−</button>
+                <output id="zoom-level" aria-live="polite">100%</output>
+                <button class="zoom-button" id="zoom-in" type="button" title="تكبير" aria-label="تكبير">+</button>
+              </div>
+              <button class="tool-button delete-tool" id="delete-selected" type="button" title="حذف المحدد" aria-label="حذف المحدد">
+                <span class="tool-icon">⌫</span><span class="tool-label">حذف</span>
+              </button>
+              <input id="image-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+            </div>
+
+            <div class="toolbar-divider"></div>
+
+            <label class="control control-color" title="لون الرسم والكتابة">
+              <select id="brush-color" aria-label="لون الرسم والكتابة">
+                <option value="#ffffff">أبيض</option>
+                <option value="#c4b5fd" selected>ليلكي</option>
+                <option value="#f8d477">ذهبي</option>
+                <option value="#fef3c7">كريمي</option>
+                <option value="#e9d5ff">بنفسجي فاتح</option>
+                <option value="#fbbf24">عنبر</option>
+                <option value="#d8b4fe">لافندر</option>
+              </select>
+              <span>اللون</span>
+            </label>
+            <label class="control control-range" title="حجم القلم">
+              <span>الحجم</span>
+              <input id="brush-width" type="range" min="1" max="30" value="5" />
+            </label>
+
+            <button class="clear-button" id="clear-canvas" type="button" title="مسح اللوحة">
+              <span>⌫</span> مسح
+            </button>
+          </div>
+
+          <div class="canvas-viewport">
+            <div class="canvas-wrap">
+              <canvas id="wall-canvas" width="1200" height="700"></canvas>
+            </div>
+            <div id="object-tooltip" class="object-tooltip" role="tooltip" hidden></div>
+          </div>
+          <div id="image-loader" class="image-loader" hidden>
+            <span class="spinner"></span>
+            <span id="image-loader-label">جارٍ تجهيز الصورة...</span>
+          </div>
+
+          <div class="canvas-footer">
+            <span><i class="live-dot"></i> مساحة خاصة بك</span>
+            <span id="tool-status">القلم مفعل — ارسم بحرية</span>
+          </div>
+        </div>
+        <p id="notice" class="notice" hidden></p>
+      </section>
+    </main>
+
+    <script src="/vendor/fabric/index.min.js"></script>
+    <script src="/vendor/socket.io/socket.io.min.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>
