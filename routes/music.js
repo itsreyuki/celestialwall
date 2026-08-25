@@ -5,7 +5,7 @@ const {
   createMusicTrack,
   deleteMusicTrack
 } = require('../db');
-const { resolveMusicLink, MusicLinkError } = require('../services/music-resolver');
+const { searchYouTubeVideos, resolveYouTubeVideo, MusicLinkError } = require('../services/music-resolver');
 
 const router = express.Router();
 
@@ -18,9 +18,19 @@ function requireMember(req, res, next) {
 
 router.get('/tracks', async (req, res, next) => {
   try {
-    const tracks = await listMusicTracks(80);
+    const tracks = (await listMusicTracks(80)).filter((track) => track.provider === 'youtube');
     return res.json({ tracks });
   } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/search', requireMember, async (req, res, next) => {
+  try {
+    const results = await searchYouTubeVideos(req.query.q);
+    return res.json({ results });
+  } catch (error) {
+    if (error instanceof MusicLinkError) return res.status(error.status).json({ error: error.message });
     return next(error);
   }
 });
@@ -30,7 +40,7 @@ router.post('/tracks', requireMember, async (req, res, next) => {
   if (comment.length > 500) return res.status(400).json({ error: 'التعليق يجب ألا يتجاوز 500 حرف.' });
 
   try {
-    const music = await resolveMusicLink(req.body.url);
+    const music = await resolveYouTubeVideo(req.body.videoId);
     const user = req.session.user;
     const track = await createMusicTrack({
       sourceUrl: music.sourceUrl,

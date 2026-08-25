@@ -52,16 +52,23 @@
           <span class="music-kicker">أضف إلى المعرض</span>
           <h2>ما الذي تستمع إليه اليوم؟</h2>
         </div>
+        <div class="music-search-panel">
+          <form id="music-search-form" class="music-search-form">
+            <label for="music-search-query">ابحث في YouTube</label>
+            <div>
+              <input id="music-search-query" type="search" maxlength="100" autocomplete="off" placeholder="اسم الأغنية أو الفنان" required />
+              <button id="music-search-submit" type="submit">بحث</button>
+            </div>
+          </form>
+          <div id="music-search-results" class="music-search-results" hidden></div>
+          <div id="music-selected" class="music-selected" hidden></div>
+        </div>
         <form id="music-form" class="music-form">
-          <label>
-            <span>رابط الأغنية</span>
-            <input id="music-url" name="url" type="url" inputmode="url" placeholder="رابط YouTube Music أو Spotify أو SoundCloud" required />
-          </label>
           <label>
             <span>تعليقك <em>اختياري</em></span>
             <textarea id="music-comment" name="comment" maxlength="500" rows="2" placeholder="لماذا اخترت هذه الأغنية؟"></textarea>
           </label>
-          <button id="music-submit" type="submit"><span aria-hidden="true">+</span> أضف الأغنية</button>
+          <button id="music-submit" type="submit" disabled><span aria-hidden="true">+</span> اختر أغنية أولاً</button>
         </form>
         <p id="music-form-notice" class="music-form-notice" hidden></p>
       </section>
@@ -80,9 +87,8 @@
     <aside id="music-player-dock" class="music-player-dock" hidden aria-label="المشغل الحالي"></aside>
     <div id="music-preview-host" class="music-preview-host" aria-hidden="true"></div>
 
-    <script src="https://w.soundcloud.com/player/api.js" async></script>
     <script src="/vendor/socket.io/socket.io.min.js"></script>
     <script src="/music.js"></script>
-    <script src="https://open.spotify.com/embed/iframe-api/v1" async></script>
+    <script src="https://www.youtube.com/iframe_api" async></script>
   </body>
 </html>
