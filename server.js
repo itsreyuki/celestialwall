@@ -12,6 +12,7 @@ const { initCanvasDatabase, getDatabasePool, getCanvasState, saveCanvasState } =
 
 const authRoutes = require('./routes/auth');
 const apiRoutes = require('./routes/api');
+const musicRoutes = require('./routes/music');
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -60,6 +61,7 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 app.use('/auth', authRoutes);
+app.use('/api/music', musicRoutes);
 app.use('/api', apiRoutes);
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
 app.use('/vendor/fabric', express.static(path.join(__dirname, 'node_modules', 'fabric', 'dist')));
@@ -69,6 +71,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime() });
 });
+
+app.get('/music', (req, res) => res.sendFile(path.join(__dirname, 'public', 'music.html')));
 
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api') || req.path.startsWith('/auth')) {
@@ -89,6 +93,7 @@ const io = new Server(httpServer, {
     credentials: true
   }
 });
+const musicIo = io.of('/music');
 
 const connectedUsers = new Set();
 let canvasWriteQueue = Promise.resolve();
@@ -261,12 +266,20 @@ function broadcastPresence() {
   io.emit('presence:update', { count: connectedUsers.size });
 }
 
-io.use((socket, next) => {
+function applySocketSession(socket, next) {
   sessionMiddleware(socket.request, {}, () => {
     passport.initialize()(socket.request, {}, () => {
       passport.session()(socket.request, {}, next);
     });
   });
+}
+
+io.use(applySocketSession);
+musicIo.use(applySocketSession);
+
+musicIo.on('connection', (socket) => {
+  const user = socket.request.session?.user || socket.request.user;
+  socket.emit('music:session', { canContribute: Boolean(user?.isMember) });
 });
 
 io.on('connection', (socket) => {
@@ -408,6 +421,7 @@ io.on('connection', (socket) => {
 
 // يتيح لمسار API نشر الرسائل الجديدة لجميع العملاء المتصلين.
 app.set('io', io);
+app.set('musicIo', musicIo);
 
 initCanvasDatabase()
   .then(() => {

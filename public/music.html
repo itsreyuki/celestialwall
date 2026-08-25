@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#110b1b" />
+    <meta name="description" content="شباك الموسيقى من مجتمع سيليستيا — استمع إلى اختيارات الأعضاء واكتشف أغانيهم." />
+    <meta name="robots" content="index, follow" />
+    <title>شباك الموسيقى | CELESTIAL WALL</title>
+    <link rel="icon" type="image/png" href="/assets/logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/music.css" />
+  </head>
+  <body class="music-page">
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+    <div class="bubble-field" aria-hidden="true">
+      <span class="bubble bubble-a"></span><span class="bubble bubble-b"></span>
+      <span class="bubble bubble-c"></span><span class="bubble bubble-d"></span>
+      <span class="bubble bubble-e"></span><span class="bubble bubble-f"></span>
+    </div>
+
+    <main class="page-shell music-shell">
+      <header class="topbar music-topbar">
+        <a class="brand" href="/" aria-label="العودة إلى جدار سيليستيا">
+          <span class="brand-mark"><img src="/assets/logo.png" alt="شعار سيليستيا" /></span>
+          <span><strong>شباك الموسيقى</strong><small>CELESTIAL MUSIC</small></span>
+        </a>
+        <div class="topbar-actions">
+          <a class="music-nav-link" href="/"><span aria-hidden="true">←</span> الجدار</a>
+          <a id="music-login" class="music-nav-link" href="/auth/discord">تسجيل الدخول للمشاركة</a>
+          <div id="music-account" class="account" hidden></div>
+        </div>
+      </header>
+
+      <section class="music-hero">
+        <span class="pill"><i></i> اختيارات مجتمع سيليستيا</span>
+        <h1>شباك <span>الموسيقى.</span></h1>
+        <p>مساحة صغيرة للاستماع إلى الأغاني التي تركها أعضاء سيليستيا خلفهم.</p>
+      </section>
+
+      <section id="music-member-gate" class="music-member-gate" hidden>
+        <span>يمكنك الاستماع كزائر. انضم إلى مجتمع سيليستيا وسجّل دخولك لتضيف أغنيتك.</span>
+        <a id="music-invite" href="https://discord.gg/celes" target="_blank" rel="noopener">انضم إلى سيليستيا</a>
+      </section>
+
+      <section id="music-composer" class="music-composer" hidden>
+        <div>
+          <span class="music-kicker">أضف إلى المعرض</span>
+          <h2>ما الذي تستمع إليه اليوم؟</h2>
+        </div>
+        <form id="music-form" class="music-form">
+          <label>
+            <span>رابط الأغنية</span>
+            <input id="music-url" name="url" type="url" inputmode="url" placeholder="رابط YouTube Music أو Spotify أو SoundCloud" required />
+          </label>
+          <label>
+            <span>تعليقك <em>اختياري</em></span>
+            <textarea id="music-comment" name="comment" maxlength="500" rows="2" placeholder="لماذا اخترت هذه الأغنية؟"></textarea>
+          </label>
+          <button id="music-submit" type="submit"><span aria-hidden="true">+</span> أضف الأغنية</button>
+        </form>
+        <p id="music-form-notice" class="music-form-notice" hidden></p>
+      </section>
+
+      <section class="music-gallery-section" aria-labelledby="music-gallery-title">
+        <div class="music-gallery-heading">
+          <div><span class="music-kicker">استمع مع المجتمع</span><h2 id="music-gallery-title">أغاني على السطر</h2></div>
+          <span id="music-count" class="music-count">0 أغنية</span>
+        </div>
+        <div id="music-gallery" class="music-gallery" aria-live="polite">
+          <div class="music-loading">جارٍ فتح الشباك...</div>
+        </div>
+      </section>
+    </main>
+
+    <aside id="music-player-dock" class="music-player-dock" hidden aria-label="المشغل الحالي"></aside>
+    <div id="music-preview-host" class="music-preview-host" aria-hidden="true"></div>
+
+    <script src="https://w.soundcloud.com/player/api.js" async></script>
+    <script src="/vendor/socket.io/socket.io.min.js"></script>
+    <script src="/music.js"></script>
+    <script src="https://open.spotify.com/embed/iframe-api/v1" async></script>
+  </body>
+</html>

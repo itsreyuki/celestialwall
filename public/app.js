@@ -25,6 +25,7 @@ const checkMembershipButton = document.querySelector('#check-membership');
 const membershipNotice = document.querySelector('#membership-notice');
 const canvasWrap = document.querySelector('.canvas-wrap');
 const guestViewNotice = document.querySelector('#guest-view-notice');
+const musicNavLink = document.querySelector('#music-nav-link');
 const isGuestView = new URLSearchParams(window.location.search).get('view') === 'guest';
 
 let currentUser = null;
@@ -687,6 +688,7 @@ function renderAccount(user) {
     <span class="account-name">${avatarMarkup}<span>${escapeHtml(user.global_name || user.username)}</span></span>
     <button id="logout" class="logout-button" type="button">تسجيل الخروج</button>`;
   account.hidden = false;
+  musicNavLink.hidden = false;
 
   document.querySelector('#logout').addEventListener('click', async () => {
     const response = await fetch('/auth/logout', { method: 'POST' });
@@ -1062,6 +1064,7 @@ async function loadSession() {
     membershipGate.hidden = true;
     workspace.hidden = true;
     account.hidden = true;
+    musicNavLink.hidden = true;
     presence.hidden = true;
     return;
   }
