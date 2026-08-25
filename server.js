@@ -92,6 +92,9 @@ const io = new Server(httpServer, {
 
 const connectedUsers = new Set();
 let canvasWriteQueue = Promise.resolve();
+const TEXT_PLACEHOLDER = 'اكتب هنا...';
+const TEXT_EDIT_TIMEOUT = 5 * 60 * 1000;
+const textExpiryTimers = new Map();
 
 function persistCanvasMutation(mutator) {
   const operation = canvasWriteQueue.then(async () => {
@@ -123,6 +126,59 @@ function appendUniqueObjects(state, objects) {
   });
 }
 
+function isTextObject(object) {
+  return ['i-text', 'text', 'textbox'].includes(object?.type);
+}
+
+function isDrawingObject(object) {
+  return object?.type === 'path';
+}
+
+function serializedBounds(object, padding = 10) {
+  const scaleX = Math.abs(Number(object?.scaleX) || 1);
+  const scaleY = Math.abs(Number(object?.scaleY) || 1);
+  const width = Math.max(1, Math.abs(Number(object?.width) || 0) * scaleX) + padding * 2;
+  const height = Math.max(1, Math.abs(Number(object?.height) || 0) * scaleY) + padding * 2;
+  let left = Number(object?.left) || 0;
+  let top = Number(object?.top) || 0;
+
+  if (object?.originX === 'center') left -= width / 2;
+  if (object?.originX === 'right') left -= width;
+  if (object?.originY === 'center') top -= height / 2;
+  if (object?.originY === 'bottom') top -= height;
+
+  return { left, top, right: left + width, bottom: top + height };
+}
+
+function objectsOverlap(first, second) {
+  const firstBounds = serializedBounds(first);
+  const secondBounds = serializedBounds(second);
+  return firstBounds.left < secondBounds.right
+    && firstBounds.right > secondBounds.left
+    && firstBounds.top < secondBounds.bottom
+    && firstBounds.bottom > secondBounds.top;
+}
+
+function hasForeignOverlap(state, object, userId, acceptedTypes) {
+  const objectId = object?.metadata?.objectId;
+  return state.objects.some((candidate) => (
+    candidate.metadata?.userId !== userId
+    && candidate.metadata?.objectId !== objectId
+    && acceptedTypes(candidate)
+    && objectsOverlap(object, candidate)
+  ));
+}
+
+function hasForeignDrawingOverlap(state, object, userId) {
+  return isDrawingObject(object)
+    && hasForeignOverlap(state, object, userId, isDrawingObject);
+}
+
+function hasForeignTextPlacementOverlap(state, object, userId) {
+  return isTextObject(object)
+    && hasForeignOverlap(state, object, userId, (candidate) => isDrawingObject(candidate) || isTextObject(candidate));
+}
+
 function userMetadata(user) {
   return {
     userId: user.id,
@@ -131,9 +187,21 @@ function userMetadata(user) {
   };
 }
 
-function ownedObject(object, user) {
+function ownedObject(object, user, existingObject = null) {
   const copy = structuredClone(object);
   copy.metadata = { ...(copy.metadata || {}), ...userMetadata(user) };
+  if (isTextObject(copy)) {
+    const isPlaceholder = copy.text === TEXT_PLACEHOLDER;
+    const existingExpiry = Number(existingObject?.metadata?.textExpiresAt) || 0;
+    copy.metadata.textPending = isPlaceholder && (existingObject?.metadata?.textPending !== false);
+    if (copy.metadata.textPending) {
+      copy.metadata.textExpiresAt = existingExpiry > Date.now()
+        ? existingExpiry
+        : Date.now() + TEXT_EDIT_TIMEOUT;
+    } else {
+      delete copy.metadata.textExpiresAt;
+    }
+  }
   return copy;
 }
 
@@ -156,6 +224,37 @@ function updateObjectOwnedBy(state, object, userId) {
   if (!objectId || index === -1 || state.objects[index].metadata?.userId !== userId) return false;
   state.objects[index] = object;
   return true;
+}
+
+function clearTextExpiry(objectId) {
+  const timer = textExpiryTimers.get(objectId);
+  if (timer) clearTimeout(timer);
+  textExpiryTimers.delete(objectId);
+}
+
+function scheduleTextExpiry(object) {
+  const objectId = object?.metadata?.objectId;
+  const expiresAt = Number(object?.metadata?.textExpiresAt) || 0;
+  clearTextExpiry(objectId);
+  if (!objectId || !object?.metadata?.textPending || !expiresAt) return;
+
+  const delay = Math.max(0, expiresAt - Date.now());
+  const timer = setTimeout(() => {
+    textExpiryTimers.delete(objectId);
+    let removed = false;
+    persistCanvasMutation((state) => {
+      const index = state.objects.findIndex((item) => item.metadata?.objectId === objectId);
+      const candidate = state.objects[index];
+      if (index === -1 || !candidate?.metadata?.textPending || Number(candidate.metadata.textExpiresAt) > Date.now()) return;
+      state.objects.splice(index, 1);
+      removed = true;
+    })
+      .then(() => {
+        if (removed) io.emit('remove-object', { objectId, reason: 'text-expired' });
+      })
+      .catch((error) => console.error('Unable to expire placeholder text:', error));
+  }, delay);
+  textExpiryTimers.set(objectId, timer);
 }
 
 function broadcastPresence() {
@@ -199,9 +298,16 @@ io.on('connection', (socket) => {
     if (!canUseWall) return;
     const objects = ownedObjects(payload, user);
     if (!objects.length) return;
-    const safePayload = { ...payload, object: objects[0], objects };
-    persistCanvasMutation((state) => appendUniqueObjects(state, objects))
-      .then(() => relayToOtherClients('draw', safePayload))
+    let acceptedObjects = [];
+    persistCanvasMutation((state) => {
+      acceptedObjects = objects.filter((object) => !hasForeignDrawingOverlap(state, object, user.id));
+      appendUniqueObjects(state, acceptedObjects);
+    })
+      .then(() => {
+        if (!acceptedObjects.length) return socket.emit('permission-denied', { action: 'draw-overlap' });
+        acceptedObjects.forEach(scheduleTextExpiry);
+        return relayToOtherClients('draw', { ...payload, object: acceptedObjects[0], objects: acceptedObjects });
+      })
       .catch((error) => console.error('Unable to persist draw:', error));
   });
 
@@ -209,19 +315,35 @@ io.on('connection', (socket) => {
     if (!canUseWall) return;
     const objects = ownedObjects(payload, user);
     if (!objects.length) return;
-    const safePayload = { ...payload, object: objects[0], objects };
-    persistCanvasMutation((state) => appendUniqueObjects(state, objects))
-      .then(() => relayToOtherClients('add-object', safePayload))
+    let acceptedObjects = [];
+    persistCanvasMutation((state) => {
+      acceptedObjects = objects.filter((object) => !hasForeignTextPlacementOverlap(state, object, user.id));
+      appendUniqueObjects(state, acceptedObjects);
+    })
+      .then(() => {
+        if (!acceptedObjects.length) return socket.emit('permission-denied', { action: 'place-text' });
+        acceptedObjects.forEach(scheduleTextExpiry);
+        return relayToOtherClients('add-object', { ...payload, object: acceptedObjects[0], objects: acceptedObjects });
+      })
       .catch((error) => console.error('Unable to persist object:', error));
   });
 
   socket.on('update-object', (payload) => {
     if (!canUseWall || !payload?.object) return;
-    const object = ownedObject(payload.object, user);
     let updated = false;
-    persistCanvasMutation((state) => { updated = updateObjectOwnedBy(state, object, user.id); })
+    let object = null;
+    let overlapBlocked = false;
+    persistCanvasMutation((state) => {
+      const existing = state.objects.find((item) => item.metadata?.objectId === payload.object.metadata?.objectId);
+      object = ownedObject(payload.object, user, existing);
+      overlapBlocked = hasForeignDrawingOverlap(state, object, user.id)
+        || hasForeignTextPlacementOverlap(state, object, user.id);
+      updated = !overlapBlocked && updateObjectOwnedBy(state, object, user.id);
+    })
       .then(() => {
+        if (overlapBlocked) return socket.emit('permission-denied', { action: 'place-text' });
         if (!updated) return socket.emit('permission-denied', { action: 'update-object' });
+        scheduleTextExpiry(object);
         return relayToOtherClients('update-object', { ...payload, object });
       })
       .catch((error) => console.error('Unable to persist object update:', error));
@@ -233,6 +355,7 @@ io.on('connection', (socket) => {
     persistCanvasMutation((state) => { removed = removeObjectOwnedBy(state, payload.objectId, user.id); })
       .then(() => {
         if (!removed) return socket.emit('permission-denied', { action: 'remove-object' });
+        clearTextExpiry(payload.objectId);
         return relayToOtherClients('remove-object', payload);
       })
       .catch((error) => console.error('Unable to persist object removal:', error));
@@ -250,6 +373,7 @@ io.on('connection', (socket) => {
     })
       .then(() => {
         if (!objectIds.length) return;
+        objectIds.forEach(clearTextExpiry);
         return relayToOtherClients('clear-canvas', { ...payload, objectIds });
       })
       .catch((error) => console.error('Unable to persist clear:', error));
@@ -285,6 +409,7 @@ app.set('io', io);
 
 initCanvasDatabase()
   .then(() => {
+    getCanvasState().objects.forEach(scheduleTextExpiry);
     const host = process.env.HOST || '0.0.0.0';
     httpServer.listen(port, host, () => {
       console.log(`Celestial Wall is running at http://${host}:${port}`);

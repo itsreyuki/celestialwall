@@ -90,3 +90,18 @@ body { color: #fbf7ff; }
 .canvas-viewport.pan-ready .canvas-wrap, .canvas-viewport.pan-ready canvas { cursor: grab !important; }
 .canvas-viewport, html, body { scrollbar-width: none; -ms-overflow-style: none; }
 .canvas-viewport::-webkit-scrollbar, html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
+/* Refined canvas interaction states */
+.canvas-card { overflow: hidden; border-color: rgba(240, 197, 94, .24); box-shadow: 0 32px 90px rgba(6, 3, 16, .45), inset 0 1px rgba(255, 237, 181, .08); }
+.toolbar { margin: 10px; border-radius: 18px; background: linear-gradient(120deg, rgba(40, 27, 69, .96), rgba(28, 20, 49, .96)); }
+.tool-button, .clear-button, .zoom-button { min-height: 34px; }
+.tool-button:hover, .zoom-button:hover { transform: translateY(-1px); }
+.canvas-viewport { position: relative; background: radial-gradient(circle at 15% 5%, rgba(147, 95, 224, .14), transparent 34%), radial-gradient(circle at 85% 100%, rgba(229, 179, 67, .11), transparent 32%), #110c1b; scroll-behavior: smooth; }
+.canvas-viewport::before { position: absolute; z-index: 0; inset: 0; background-image: radial-gradient(rgba(255, 225, 144, .11) .7px, transparent .7px); background-size: 22px 22px; content: ""; opacity: .42; pointer-events: none; }
+.canvas-wrap { position: relative; z-index: 1; border: 1px solid rgba(255, 223, 138, .16); border-radius: 12px; box-shadow: 0 20px 55px rgba(0, 0, 0, .52), 0 0 0 1px rgba(135, 83, 217, .1); transition: box-shadow .22s ease, transform .22s ease; }
+.canvas-viewport.pan-ready .canvas-wrap { box-shadow: 0 20px 55px rgba(0, 0, 0, .55), 0 0 0 1px rgba(239, 196, 93, .35); }
+.canvas-viewport.is-panning .canvas-wrap { transform: scale(.998); }
+.canvas-viewport.drawing-blocked, .canvas-viewport.drawing-blocked .canvas-wrap, .canvas-viewport.drawing-blocked canvas { cursor: not-allowed !important; }
+.zoom-controls { box-shadow: inset 0 1px rgba(255, 237, 181, .05); }
+.zoom-controls output { padding-inline: 2px; color: #f8dc94; }
+@media (max-width: 760px) { .toolbar { gap: 8px; padding: 10px; }.zoom-controls { order: 3; }.canvas-wrap { border-radius: 9px; } }

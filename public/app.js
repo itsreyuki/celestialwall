@@ -34,6 +34,7 @@ let remoteChangeQueue = Promise.resolve();
 let activeTool = 'draw';
 let isPanning = false;
 let panStart = null;
+let temporaryPanTool = null;
 let worldWidth = 1200;
 let worldHeight = 700;
 const EXPANSION_WIDTH = 800;
@@ -43,7 +44,12 @@ const EDGE_MARGIN = 120;
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2.5;
 const ZOOM_STEP = 0.1;
+const TEXT_PLACEHOLDER = 'اكتب هنا...';
+const TEXT_EDIT_TIMEOUT = 5 * 60 * 1000;
+const COLLISION_PADDING = 10;
 const hoverStates = new WeakMap();
+const textPlacementStates = new WeakMap();
+let drawBlocked = false;
 
 function creatorMetadata() {
   return {
@@ -64,6 +70,126 @@ function addMetadata(object) {
   if (!metadata.objectId) metadata.objectId = createObjectId();
   object.set('metadata', metadata);
   return object;
+}
+
+function isTextObject(object) {
+  return ['i-text', 'text', 'textbox'].includes(object?.type);
+}
+
+function isDrawingObject(object) {
+  return object?.type === 'path';
+}
+
+function isForeignObject(object) {
+  return Boolean(object?.metadata?.userId && object.metadata.userId !== currentUser?.id);
+}
+
+function objectBounds(object, padding = 0) {
+  const rect = object.getBoundingRect();
+  return {
+    left: rect.left - padding,
+    top: rect.top - padding,
+    right: rect.left + rect.width + padding,
+    bottom: rect.top + rect.height + padding
+  };
+}
+
+function rectanglesOverlap(first, second) {
+  return first.left < second.right
+    && first.right > second.left
+    && first.top < second.bottom
+    && first.bottom > second.top;
+}
+
+function pointInBounds(point, bounds) {
+  return point.x >= bounds.left
+    && point.x <= bounds.right
+    && point.y >= bounds.top
+    && point.y <= bounds.bottom;
+}
+
+function scenePointFromEvent(event) {
+  if (!wallCanvas || !event) return null;
+  return wallCanvas.getScenePoint ? wallCanvas.getScenePoint(event) : wallCanvas.getPointer(event);
+}
+
+function hasForeignOverlap(object, acceptedTypes) {
+  if (!wallCanvas || !object) return false;
+  const bounds = objectBounds(object, COLLISION_PADDING);
+  return wallCanvas.getObjects().some((candidate) => (
+    candidate !== object
+    && isForeignObject(candidate)
+    && acceptedTypes(candidate)
+    && rectanglesOverlap(bounds, objectBounds(candidate, COLLISION_PADDING))
+  ));
+}
+
+function hasForeignDrawingAt(point) {
+  if (!wallCanvas || !point) return false;
+  return wallCanvas.getObjects().some((object) => (
+    isForeignObject(object)
+    && isDrawingObject(object)
+    && pointInBounds(point, objectBounds(object, COLLISION_PADDING))
+  ));
+}
+
+function hasForeignDrawingOverlap(path) {
+  return hasForeignOverlap(path, isDrawingObject);
+}
+
+function hasForeignTextPlacementOverlap(text) {
+  return hasForeignOverlap(text, (object) => isDrawingObject(object) || isTextObject(object));
+}
+
+function setDrawingBlocked(blocked) {
+  drawBlocked = blocked;
+  canvasViewport.classList.toggle('drawing-blocked', blocked);
+  if (wallCanvas && activeTool === 'draw') {
+    wallCanvas.defaultCursor = blocked ? 'not-allowed' : 'crosshair';
+  }
+}
+
+function setTextPlacementFeedback(text, blocked) {
+  if (!text) return;
+  text.set({
+    backgroundColor: blocked ? 'rgba(251, 113, 133, .18)' : 'rgba(134, 239, 172, .13)',
+    stroke: blocked ? '#fb7185' : '#86efac',
+    strokeWidth: 1.5,
+    strokeUniform: true
+  });
+  text.setCoords();
+  wallCanvas?.requestRenderAll();
+}
+
+function clearTextPlacementFeedback(text) {
+  text.set({ backgroundColor: '', stroke: null, strokeWidth: 0 });
+  text.setCoords();
+  wallCanvas?.requestRenderAll();
+}
+
+function setTextPlacementState(text) {
+  const blocked = hasForeignTextPlacementOverlap(text);
+  const state = textPlacementStates.get(text) || {};
+  if (!blocked) {
+    state.lastValid = { left: text.left, top: text.top };
+  }
+  textPlacementStates.set(text, state);
+  setTextPlacementFeedback(text, blocked);
+  return !blocked;
+}
+
+function findAvailableTextPosition(text, center) {
+  const offsets = [
+    [0, 0], [0, -110], [0, 110], [-190, 0], [190, 0],
+    [-190, -110], [190, -110], [-190, 110], [190, 110]
+  ];
+
+  for (const [offsetX, offsetY] of offsets) {
+    text.set({ left: center.left + offsetX, top: center.top + offsetY });
+    text.setCoords();
+    if (!hasForeignTextPlacementOverlap(text)) return true;
+  }
+  return false;
 }
 
 function visibleCanvasCenter() {
@@ -101,17 +227,19 @@ function updateZoomLabel() {
   zoomLevel.textContent = zoomLevel.value;
 }
 
-function zoomCanvas(delta) {
+function zoomCanvas(delta, anchorEvent = null) {
   if (!wallCanvas) return;
   const currentZoom = wallCanvas.getZoom() || 1;
   const nextZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, currentZoom + delta));
   if (Math.abs(nextZoom - currentZoom) < 0.001) return;
 
-  const viewportRect = canvasViewport.getBoundingClientRect();
   const canvasRect = canvasWrap.getBoundingClientRect();
+  const viewportRect = canvasViewport.getBoundingClientRect();
+  const anchorX = anchorEvent?.clientX ?? viewportRect.left + viewportRect.width / 2;
+  const anchorY = anchorEvent?.clientY ?? viewportRect.top + viewportRect.height / 2;
   const centerPoint = new fabric.Point(
-    viewportRect.left + viewportRect.width / 2 - canvasRect.left,
-    viewportRect.top + viewportRect.height / 2 - canvasRect.top
+    anchorX - canvasRect.left,
+    anchorY - canvasRect.top
   );
 
   wallCanvas.zoomToPoint(centerPoint, nextZoom);
@@ -439,6 +567,8 @@ function initializeCollaboration() {
   socket.on('permission-denied', ({ action }) => {
     if (action === 'remove-object') showNotice('لا يمكنك حذف إضافة عضو آخر.');
     if (action === 'update-object') showNotice('لا يمكنك تعديل إضافة عضو آخر.');
+    if (action === 'draw-overlap') showNotice('لا يمكن الرسم فوق رسم عضو آخر.');
+    if (action === 'place-text') showNotice('ضع النص في مساحة خضراء بعيدًا عن مشاركات الأعضاء الآخرين.');
   });
 
   socket.on('canvas:expand', (payload) => {
@@ -572,13 +702,14 @@ function setTool(tool) {
 
   if (!wallCanvas) return;
   wallCanvas.isDrawingMode = tool === 'draw';
+  if (tool !== 'draw') setDrawingBlocked(false);
   updateObjectInteractivity(tool === 'select');
   wallCanvas.skipTargetFind = tool === 'pan';
   canvasViewport.classList.toggle('pan-ready', tool === 'pan');
-  wallCanvas.defaultCursor = tool === 'draw' ? 'crosshair' : ['select', 'pan'].includes(tool) ? 'grab' : 'default';
+  wallCanvas.defaultCursor = tool === 'draw' ? (drawBlocked ? 'not-allowed' : 'crosshair') : ['select', 'pan'].includes(tool) ? 'grab' : 'default';
 
   const status = {
-    draw: 'القلم مفعل — ارسم بحرية',
+    draw: 'القلم مفعل — لا يمكن الرسم فوق رسم الآخرين',
     select: 'التحديد مفعل — اسحب وعدّل الكائنات',
     pan: 'التحريك مفعل — اسحب لتحريك اللوحة',
     text: 'تمت إضافة النص في منتصف اللوحة'
@@ -590,7 +721,7 @@ function setTool(tool) {
 function addTextAtCenter() {
   if (!wallCanvas) return;
   const center = visibleCanvasCenter();
-  const text = addMetadata(new fabric.IText('اكتب هنا...', {
+  const text = addMetadata(new fabric.IText(TEXT_PLACEHOLDER, {
     left: center.left,
     top: center.top,
     fill: brushColor.value,
@@ -603,12 +734,28 @@ function addTextAtCenter() {
     originY: 'center',
     padding: 6
   }));
+  text.set('metadata', {
+    ...text.metadata,
+    textPending: true,
+    textExpiresAt: Date.now() + TEXT_EDIT_TIMEOUT
+  });
 
+  const placed = findAvailableTextPosition(text, center);
+  setTextPlacementState(text);
+
+  text.__awaitingValidPlacement = !placed;
+  suppressCanvasSync = true;
   wallCanvas.add(text);
+  suppressCanvasSync = false;
+  if (placed) syncObject(text);
   wallCanvas.setActiveObject(text);
   setTool('select');
-  text.enterEditing();
-  text.selectAll();
+  if (placed) {
+    text.enterEditing();
+    text.selectAll();
+  } else {
+    showNotice('لا توجد مساحة خضراء قريبة للنص. اسحب المربع إلى مساحة متاحة.');
+  }
   wallCanvas.requestRenderAll();
 }
 
@@ -686,6 +833,50 @@ function handleCanvasMouseUp() {
   if (activeTool === 'select') wallCanvas.selection = true;
 }
 
+function handleDrawingMouseMoveBefore(event) {
+  if (activeTool !== 'draw' || !wallCanvas || wallCanvas._isCurrentlyDrawing) return;
+  setDrawingBlocked(hasForeignDrawingAt(scenePointFromEvent(event.e)));
+}
+
+function handleDrawingMouseDownBefore(event) {
+  if (activeTool !== 'draw' || !wallCanvas) return;
+  const blocked = hasForeignDrawingAt(scenePointFromEvent(event.e));
+  setDrawingBlocked(blocked);
+  if (!blocked) return;
+
+  wallCanvas.isDrawingMode = false;
+  event.e.preventDefault();
+  showNotice('لا يمكن الرسم فوق رسم عضو آخر.');
+  window.setTimeout(() => {
+    if (activeTool === 'draw') wallCanvas.isDrawingMode = true;
+  }, 0);
+}
+
+function keepTextInValidArea(text) {
+  if (!isTextObject(text) || !isOwnedByCurrentUser(text)) return true;
+  if (setTextPlacementState(text)) return true;
+
+  const previous = textPlacementStates.get(text)?.lastValid;
+  if (previous) {
+    text.set(previous);
+    text.setCoords();
+    setTextPlacementState(text);
+  }
+  showNotice('لا يمكن وضع النص فوق رسم أو نص لعضو آخر.');
+  return false;
+}
+
+function handleTextChanged(target) {
+  if (!isTextObject(target) || !isOwnedByCurrentUser(target)) return;
+  const metadata = { ...(target.metadata || {}) };
+  const isStillPlaceholder = target.text === TEXT_PLACEHOLDER;
+  metadata.textPending = isStillPlaceholder;
+  if (!isStillPlaceholder) delete metadata.textExpiresAt;
+  target.set('metadata', metadata);
+  if (!isStillPlaceholder) clearTextPlacementFeedback(target);
+  syncObjectUpdate(target);
+}
+
 function initializeCanvas() {
   if (wallCanvas) return;
   wallCanvas = new fabric.Canvas(canvasElement, {
@@ -705,6 +896,13 @@ function initializeCanvas() {
     maybeExpandWorld();
   });
   wallCanvas.on('object:modified', ({ target }) => {
+    if (isTextObject(target) && !keepTextInValidArea(target)) return;
+    if (isTextObject(target) && target.__awaitingValidPlacement) {
+      target.__awaitingValidPlacement = false;
+      syncObject(target);
+      maybeExpandWorld();
+      return;
+    }
     syncObjectUpdate(target);
     maybeExpandWorld();
   });
@@ -713,6 +911,14 @@ function initializeCanvas() {
   });
   wallCanvas.on('path:created', ({ path }) => {
     addMetadata(path);
+    if (hasForeignDrawingOverlap(path)) {
+      suppressCanvasSync = true;
+      wallCanvas.remove(path);
+      suppressCanvasSync = false;
+      setDrawingBlocked(true);
+      showNotice('تم منع الرسم لأنه يتداخل مع رسم عضو آخر.');
+      return;
+    }
     if (!socket || applyingRemoteChange) return;
     socket.emit('draw', {
       eventType: 'path:created',
@@ -732,6 +938,12 @@ function initializeCanvas() {
     if (!target) return;
     unhoverObject(target);
   });
+  wallCanvas.on('object:moving', ({ target }) => {
+    if (isTextObject(target) && isOwnedByCurrentUser(target)) setTextPlacementState(target);
+  });
+  wallCanvas.on('text:changed', ({ target }) => handleTextChanged(target));
+  wallCanvas.on('mouse:move:before', handleDrawingMouseMoveBefore);
+  wallCanvas.on('mouse:down:before', handleDrawingMouseDownBefore);
   wallCanvas.on('mouse:down', handleCanvasMouseDown);
   wallCanvas.on('mouse:move', handleCanvasMouseMove);
   wallCanvas.on('mouse:up', handleCanvasMouseUp);
@@ -836,6 +1048,11 @@ document.querySelector('#delete-selected').addEventListener('click', deleteSelec
 zoomInButton.addEventListener('click', () => zoomCanvas(ZOOM_STEP));
 zoomOutButton.addEventListener('click', () => zoomCanvas(-ZOOM_STEP));
 checkMembershipButton.addEventListener('click', verifyMembership);
+canvasViewport.addEventListener('wheel', (event) => {
+  if (!event.ctrlKey && !event.metaKey) return;
+  event.preventDefault();
+  zoomCanvas(event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP, event);
+}, { passive: false });
 ['mouseenter', 'mousemove', 'focusin', 'touchstart'].forEach((eventName) => {
   canvasCard.addEventListener(eventName, wakeToolbar, { passive: true });
 });
@@ -843,6 +1060,14 @@ window.addEventListener('scroll', wakeToolbar, { passive: true });
 wakeToolbar();
 
 document.addEventListener('keydown', (event) => {
+  if (event.code === 'Space' && wallCanvas && !wallCanvas.getActiveObject()?.isEditing && activeTool !== 'pan') {
+    event.preventDefault();
+    if (!temporaryPanTool) {
+      temporaryPanTool = activeTool;
+      setTool('pan');
+    }
+    return;
+  }
   if (event.key !== 'Delete' || !wallCanvas || wallCanvas.getActiveObject()?.isEditing) return;
   const activeObject = wallCanvas.getActiveObject();
   if (activeObject) {
@@ -855,6 +1080,13 @@ document.addEventListener('keydown', (event) => {
     wallCanvas.discardActiveObject();
     wallCanvas.requestRenderAll();
   }
+});
+
+document.addEventListener('keyup', (event) => {
+  if (event.code !== 'Space' || !temporaryPanTool) return;
+  const previousTool = temporaryPanTool;
+  temporaryPanTool = null;
+  setTool(previousTool);
 });
 
 if (typeof fabric === 'undefined') {
