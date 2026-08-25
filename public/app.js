@@ -555,9 +555,13 @@ function configureBrush() {
 function updateObjectInteractivity(selectable) {
   wallCanvas.selection = selectable;
   wallCanvas.forEachObject((object) => {
-    object.selectable = selectable;
-    object.evented = selectable;
+    object.selectable = selectable && isOwnedByCurrentUser(object);
+    // Keep remote objects evented so their creator tooltip still appears on hover.
+    object.evented = true;
   });
+  if (wallCanvas.getActiveObject() && !isOwnedByCurrentUser(wallCanvas.getActiveObject())) {
+    wallCanvas.discardActiveObject();
+  }
 }
 
 function setTool(tool) {
