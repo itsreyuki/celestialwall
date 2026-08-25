@@ -10,6 +10,10 @@ const musicMedia = document.querySelector('#music-media');
 const musicPoster = document.querySelector('#music-poster');
 const musicSubmit = document.querySelector('#music-submit');
 const musicFormNotice = document.querySelector('#music-form-notice');
+const musicUploadProgress = document.querySelector('#music-upload-progress');
+const musicUploadStatus = document.querySelector('#music-upload-status');
+const musicUploadPercent = document.querySelector('#music-upload-percent');
+const musicUploadProgressFill = document.querySelector('#music-upload-progress-fill');
 const musicAccount = document.querySelector('#music-account');
 const musicLogin = document.querySelector('#music-login');
 const musicPlayerDock = document.querySelector('#music-player-dock');
@@ -82,6 +86,41 @@ function renderTracks() {
 function showFormNotice(message = '') {
   musicFormNotice.textContent = message;
   musicFormNotice.hidden = !message;
+}
+
+function setUploadProgress(percent, status) {
+  const value = Math.max(0, Math.min(100, Number(percent) || 0));
+  musicUploadProgress.hidden = false;
+  musicUploadProgressFill.style.width = value + '%';
+  musicUploadPercent.textContent = Math.round(value) + '%';
+  if (status) musicUploadStatus.textContent = status;
+}
+
+function uploadTrack(formData) {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open('POST', '/api/music/tracks');
+    request.responseType = 'json';
+    request.upload.addEventListener('progress', (event) => {
+      if (!event.lengthComputable) return;
+      // Leave a little space while the server converts the upload and saves it.
+      const percent = Math.min(90, (event.loaded / event.total) * 90);
+      setUploadProgress(percent, 'جارٍ رفع الملف...');
+    });
+    request.upload.addEventListener('load', () => setUploadProgress(92, 'تم الرفع، جارٍ تحويل الصوت وحفظه...'));
+    request.addEventListener('load', () => {
+      const data = request.response || (() => {
+        try { return JSON.parse(request.responseText); } catch { return {}; }
+      })();
+      if (request.status >= 200 && request.status < 300) {
+        setUploadProgress(100, 'اكتمل الحفظ.');
+        return resolve(data);
+      }
+      return reject(new Error(data?.error || 'تعذّر إضافة الأغنية.'));
+    });
+    request.addEventListener('error', () => reject(new Error('تعذّر الاتصال بالخادم أثناء رفع الملف.')));
+    request.send(formData);
+  });
 }
 
 function applyFocus(card) {
@@ -186,12 +225,11 @@ async function submitTrack(event) {
     return showFormNotice('اسم الأغنية وملفها وغلافها حقول مطلوبة.');
   }
   showFormNotice();
+  setUploadProgress(0, 'جارٍ تجهيز الملف...');
   musicSubmit.disabled = true;
   musicSubmit.textContent = 'جارٍ التحويل والرفع...';
   try {
-    const response = await fetch('/api/music/tracks', { method: 'POST', body: new FormData(musicForm) });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'تعذّر إضافة الأغنية.');
+    const data = await uploadTrack(new FormData(musicForm));
     upsertTrack(data.track);
     musicForm.reset();
   } catch (error) {
@@ -199,6 +237,7 @@ async function submitTrack(event) {
   } finally {
     musicSubmit.disabled = false;
     musicSubmit.innerHTML = '<span aria-hidden="true">+</span> أضف إلى الشباك';
+    window.setTimeout(() => { musicUploadProgress.hidden = true; }, 900);
   }
 }
 

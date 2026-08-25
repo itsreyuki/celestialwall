@@ -37,7 +37,6 @@
       </header>
 
       <section class="music-hero">
-        <span class="pill"><i></i> اختيارات مجتمع سيليستيا</span>
         <h1>شباك <span>الموسيقى.</span></h1>
         <p>مساحة صغيرة للاستماع إلى المقاطع الأصلية والمرخّصة التي يشاركها أعضاء سيليستيا.</p>
       </section>
@@ -51,7 +50,7 @@
         <div>
           <span class="music-kicker">أضف إلى المعرض</span>
           <h2>شارك مقطعك</h2>
-          <p class="music-upload-help">ارفع ملف صوت أو فيديو تملك حق نشره. سيُحوّل الصوت تلقائياً إلى MP3.</p>
+          <p class="music-upload-help">ارفع ملف صوت أو فيديو. سيُحوّل الصوت تلقائياً إلى MP3.</p>
         </div>
         <form id="music-form" class="music-form upload-form" enctype="multipart/form-data">
           <label>
@@ -72,6 +71,10 @@
           </label>
           <button id="music-submit" type="submit"><span aria-hidden="true">+</span> أضف إلى الشباك</button>
           <p id="music-form-notice" class="music-form-notice" hidden></p>
+          <div id="music-upload-progress" class="music-upload-progress" hidden aria-live="polite">
+            <div><span id="music-upload-status">جارٍ رفع الملف...</span><strong id="music-upload-percent">0%</strong></div>
+            <div class="music-upload-progress-track"><span id="music-upload-progress-fill"></span></div>
+          </div>
         </form>
       </section>
 
