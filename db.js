@@ -53,6 +53,14 @@ async function initCanvasDatabase() {
       last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await pool.query(`
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS global_name TEXT,
+      ADD COLUMN IF NOT EXISTS avatar TEXT,
+      ADD COLUMN IF NOT EXISTS is_member BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS first_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  `);
 
   const result = await pool.query('SELECT state FROM canvas_state WHERE id = $1', [CANVAS_ID]);
   if (!result.rows.length) {
