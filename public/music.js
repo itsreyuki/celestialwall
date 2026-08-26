@@ -29,6 +29,9 @@ let previewAudio = null;
 let previewEchoAudio = null;
 let previewEnabled = true;
 let musicSocket = null;
+let galleryFlowFrame = null;
+let galleryFlowLastTime = 0;
+let galleryFlowStates = [];
 
 function escapeHtml(value) {
   return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;')
@@ -66,26 +69,90 @@ function cardMarkup(track) {
     + '<div class="music-time-row"><span class="music-current-time">0:00</span><span class="music-duration">--:--</span></div></div></article>';
 }
 
-function renderRow(items, reverse = false) {
-  if (!items.length) return '';
-  const groupWidth = Math.max(1, items.length) * 288;
-  const repeats = Math.max(8, Math.ceil((window.innerWidth * 2) / groupWidth) * 2);
-  const cards = Array.from({ length: repeats }, () => items).flat().map(cardMarkup).join('');
-  return '<div class="music-row' + (reverse ? ' music-row-reverse' : '') + '"><div class="music-row-track">' + cards + '</div></div>';
+function cardsPerGalleryRow() {
+  const width = window.innerWidth;
+  if (width <= 700) return 2;
+  if (width <= 1080) return 3;
+  return 4;
+}
+
+function stopGalleryFlow() {
+  if (galleryFlowFrame) window.cancelAnimationFrame(galleryFlowFrame);
+  galleryFlowFrame = null;
+  galleryFlowLastTime = 0;
+  galleryFlowStates = [];
+}
+
+function startGalleryFlow() {
+  const rows = [...musicGallery.querySelectorAll('.music-flow-row')];
+  if (!rows.length || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  galleryFlowStates = rows.flatMap((row, rowIndex) => {
+    const rowWidth = row.clientWidth;
+    const items = [...row.querySelectorAll('.music-flow-item')];
+    const direction = rowIndex % 2 === 0 ? -1 : 1;
+    const gap = 22;
+    return items.map((item, index) => {
+      const width = item.offsetWidth || 270;
+      const spread = items.length > 1
+        ? Math.max(width + gap, (rowWidth - width) / (items.length - 1))
+        : 0;
+      const x = direction < 0
+        ? Math.max(0, rowWidth - width - (index * spread))
+        : Math.min(Math.max(0, rowWidth - width), index * spread);
+      item.style.transform = `translate3d(${x}px, 0, 0)`;
+      return { item, row: rowIndex, x, width, direction };
+    });
+  });
+
+  const animate = (timestamp) => {
+    const elapsed = galleryFlowLastTime ? Math.min(48, timestamp - galleryFlowLastTime) : 16;
+    galleryFlowLastTime = timestamp;
+    if (!musicGallery.classList.contains('is-paused')) {
+      galleryFlowStates.forEach((state) => {
+        const row = rows[state.row];
+        const rowWidth = row?.clientWidth || musicGallery.clientWidth;
+        state.x += state.direction * (0.052 * elapsed);
+
+        const exited = state.direction < 0
+          ? state.x + state.width < 0
+          : state.x > rowWidth;
+        if (exited) {
+          state.row = (state.row + 1) % rows.length;
+          state.direction = state.row % 2 === 0 ? -1 : 1;
+          const nextWidth = rows[state.row]?.clientWidth || rowWidth;
+          state.x = state.direction < 0 ? nextWidth : -state.width;
+        }
+        state.item.style.transform = `translate3d(${state.x}px, 0, 0)`;
+        const nextRow = rows[state.row];
+        if (nextRow && state.item.parentElement !== nextRow) nextRow.append(state.item);
+      });
+    }
+    galleryFlowFrame = window.requestAnimationFrame(animate);
+  };
+  galleryFlowFrame = window.requestAnimationFrame(animate);
 }
 
 function renderTracks() {
+  stopGalleryFlow();
   musicCount.textContent = tracks.length + ' أغنية';
   if (!tracks.length) {
     musicGallery.classList.remove('is-paused', 'is-focused');
     musicGallery.innerHTML = '<div class="music-empty">لا توجد أغانٍ بعد — كن أول من يفتح الشباك.</div>';
     return;
   }
-  const firstRow = tracks.filter((_, index) => index % 2 === 0);
-  const secondRow = tracks.filter((_, index) => index % 2 === 1);
-  musicGallery.innerHTML = renderRow(firstRow) + renderRow(secondRow.length ? secondRow : firstRow, true);
+  const perRow = cardsPerGalleryRow();
+  const rowCount = Math.max(2, Math.ceil(tracks.length / perRow));
+  const rows = Array.from({ length: rowCount }, () => []);
+  tracks.forEach((track, index) => rows[Math.floor(index / perRow)].push(track));
+  musicGallery.innerHTML = rows.map((row, index) => (
+    '<div class="music-flow-row" data-flow-row="' + index + '">'
+      + row.map((track) => '<div class="music-flow-item" data-track-id="' + escapeHtml(track.id) + '">' + cardMarkup(track) + '</div>').join('')
+      + '</div>'
+  )).join('');
   musicGallery.querySelectorAll('.music-art img').forEach((image) => image.addEventListener('error', () => image.classList.add('broken'), { once: true }));
   updateProgressUi();
+  window.requestAnimationFrame(startGalleryFlow);
 }
 
 function showFormNotice(message = '') {

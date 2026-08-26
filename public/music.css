@@ -34,6 +34,12 @@
 .music-gallery-section { width: 100vw; margin-inline: calc(50% - 50vw); }
 .music-gallery { width: 100%; }
 .music-row-track { padding-inline: 22px; }
+.music-gallery { display: grid; gap: 24px; min-height: 0; overflow: visible; padding-block: 12px 34px; }
+.music-flow-row { position: relative; height: 338px; overflow: hidden; direction: ltr; }
+.music-flow-item { position: absolute; top: 0; left: 0; width: 270px; will-change: transform; }
+.music-flow-item .music-card { width: 270px; }
+@media (max-width: 700px) { .music-flow-row { height: 284px; }.music-flow-item, .music-flow-item .music-card { width: min(236px, calc((100vw - 36px) / 2)); }.music-flow-item .music-art { height: 198px; } }
+@media (prefers-reduced-motion: reduce) { .music-flow-item { position: relative; display: inline-block; margin: 0 10px 14px; transform: none !important; }.music-flow-row { height: auto; min-height: 0; overflow: visible; } }
 .provider-local .music-provider { background: rgba(72, 42, 111, .86); }
 .music-player-dock { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 12px 14px; direction: rtl; }
 .music-player-summary { display: flex; min-width: 0; align-items: center; gap: 11px; }
