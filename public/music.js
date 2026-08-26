@@ -135,15 +135,27 @@ function stopPreview() {
   previewAudio?.pause();
   previewAudio = null;
   previewTrackId = null;
-  previewAudioContext?.close?.().catch(() => undefined);
-  previewAudioContext = null;
+}
+
+function getPreviewAudioContext() {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return null;
+  if (!previewAudioContext || previewAudioContext.state === 'closed') {
+    previewAudioContext = new AudioContextClass();
+  }
+  return previewAudioContext;
+}
+
+function unlockPreviewAudio() {
+  const context = getPreviewAudioContext();
+  context?.resume?.().catch(() => undefined);
 }
 
 function addPreviewReverb(audio) {
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextClass) return;
   try {
-    const context = new AudioContextClass();
+    const context = getPreviewAudioContext();
+    if (!context) return;
+    context.resume().catch(() => undefined);
     const source = context.createMediaElementSource(audio);
     const convolver = context.createConvolver();
     const dry = context.createGain();
@@ -167,6 +179,11 @@ function addPreviewReverb(audio) {
     // The quiet preview still works in browsers without Web Audio support.
   }
 }
+
+// Hover alone cannot start audio in modern browsers. A normal click or touch unlocks
+// the shared audio context once, then the soft hover previews can play afterwards.
+document.addEventListener('pointerdown', unlockPreviewAudio, { passive: true });
+document.addEventListener('keydown', unlockPreviewAudio, { passive: true });
 
 function startPreview(track) {
   if (!track || previewTrackId === track.id || (activeAudio && !activeAudio.paused)) return;
