@@ -49,7 +49,7 @@
       <section id="music-composer" class="music-composer upload-composer" hidden>
         <div>
           <span class="music-kicker">أضف إلى المعرض</span>
-          <h2>شارك مقطعك</h2>
+          <div class="music-composer-heading"><h2>شارك مقطعك</h2><button id="music-close-composer" class="music-composer-close" type="button" aria-label="إغلاق نموذج الإضافة">×</button></div>
           <p class="music-upload-help">ارفع ملف صوت أو فيديو. سيُحوّل الصوت تلقائياً إلى MP3.</p>
         </div>
         <form id="music-form" class="music-form upload-form" enctype="multipart/form-data">
@@ -81,7 +81,7 @@
       <section class="music-gallery-section" aria-labelledby="music-gallery-title">
         <div class="music-gallery-heading">
           <div><span class="music-kicker">استمع مع المجتمع</span><h2 id="music-gallery-title">أغانٍ على السطر</h2></div>
-          <span id="music-count" class="music-count">0 أغنية</span>
+          <div class="music-gallery-actions"><span id="music-count" class="music-count">0 أغنية</span><button id="music-open-composer" class="music-open-composer" type="button" hidden><span aria-hidden="true">+</span> أضف أغنيتك</button></div>
         </div>
         <div id="music-gallery" class="music-gallery" aria-live="polite">
           <div class="music-loading">جارٍ فتح الشباك...</div>

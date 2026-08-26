@@ -1,6 +1,8 @@
 const musicGallery = document.querySelector('#music-gallery');
 const musicCount = document.querySelector('#music-count');
 const musicComposer = document.querySelector('#music-composer');
+const musicOpenComposer = document.querySelector('#music-open-composer');
+const musicCloseComposer = document.querySelector('#music-close-composer');
 const musicMemberGate = document.querySelector('#music-member-gate');
 const musicInvite = document.querySelector('#music-invite');
 const musicForm = document.querySelector('#music-form');
@@ -22,6 +24,8 @@ let tracks = [];
 let currentUser = null;
 let activeTrackId = null;
 let activeAudio = null;
+let previewTrackId = null;
+let previewAudio = null;
 let musicSocket = null;
 
 function escapeHtml(value) {
@@ -77,8 +81,6 @@ function renderTracks() {
   const firstRow = tracks.filter((_, index) => index % 2 === 0);
   const secondRow = tracks.filter((_, index) => index % 2 === 1);
   musicGallery.innerHTML = renderRow(firstRow) + renderRow(secondRow.length ? secondRow : firstRow, true);
-  musicGallery.classList.toggle('is-paused', Boolean(activeTrackId));
-  musicGallery.classList.toggle('is-focused', Boolean(activeTrackId));
   musicGallery.querySelectorAll('.music-art img').forEach((image) => image.addEventListener('error', () => image.classList.add('broken'), { once: true }));
   updateProgressUi();
 }
@@ -129,10 +131,28 @@ function applyFocus(card) {
   card?.classList.add('is-hovered');
 }
 
+function stopPreview() {
+  previewAudio?.pause();
+  previewAudio = null;
+  previewTrackId = null;
+}
+
+function startPreview(track) {
+  if (!track || activeTrackId === track.id || previewTrackId === track.id) return;
+  stopPreview();
+  previewTrackId = track.id;
+  previewAudio = new Audio(track.sourceUrl);
+  previewAudio.preload = 'metadata';
+  previewAudio.volume = 0.14;
+  previewAudio.addEventListener('ended', stopPreview, { once: true });
+  // Some browsers require a previous user interaction before allowing this preview.
+  previewAudio.play().catch(stopPreview);
+}
+
 function clearFocus(card) {
   card?.classList.remove('is-hovered');
-  if (activeTrackId) return;
   musicGallery.classList.remove('is-paused', 'is-focused');
+  stopPreview();
 }
 
 function updateProgressUi() {
@@ -162,7 +182,6 @@ function stopPlayer() {
   activeTrackId = null;
   musicPlayerDock.hidden = true;
   musicPlayerDock.replaceChildren();
-  musicGallery.classList.remove('is-paused', 'is-focused');
   renderTracks();
 }
 
@@ -182,8 +201,8 @@ function openPlayer(track) {
   }
 
   activeAudio?.pause();
+  stopPreview();
   activeTrackId = track.id;
-  musicGallery.classList.add('is-paused', 'is-focused');
   const image = track.artworkUrl ? '<img src="' + escapeHtml(track.artworkUrl) + '" alt="" />' : '';
   musicPlayerDock.innerHTML = '<div class="music-player-summary"><div class="music-player-art">' + image + '</div><div><strong>' + escapeHtml(track.title) + '</strong><span>أضافها ' + escapeHtml(track.author?.global_name || track.author?.username || 'عضو سيليستيا') + '</span></div></div>'
     + '<div class="music-player-controls"><button class="music-player-toggle" type="button" aria-label="إيقاف مؤقت">❚❚</button><div class="music-player-timeline"><input class="music-player-seek" type="range" min="0" max="100" value="0" step="0.1" aria-label="تقدم الأغنية" /><div><span class="music-player-current">0:00</span><span class="music-player-duration">--:--</span></div></div><button class="music-player-close" type="button">إيقاف</button></div>';
@@ -232,12 +251,23 @@ async function submitTrack(event) {
     const data = await uploadTrack(new FormData(musicForm));
     upsertTrack(data.track);
     musicForm.reset();
+    setComposerOpen(false);
   } catch (error) {
     showFormNotice(error.message || 'تعذّر إضافة الأغنية.');
   } finally {
     musicSubmit.disabled = false;
     musicSubmit.innerHTML = '<span aria-hidden="true">+</span> أضف إلى الشباك';
     window.setTimeout(() => { musicUploadProgress.hidden = true; }, 900);
+  }
+}
+
+function setComposerOpen(isOpen) {
+  if (!currentUser?.isMember) return;
+  musicComposer.hidden = !isOpen;
+  musicOpenComposer.hidden = false;
+  musicOpenComposer.setAttribute('aria-expanded', String(isOpen));
+  if (isOpen) {
+    window.setTimeout(() => musicComposer.scrollIntoView({ behavior: 'smooth', block: 'start' }), 20);
   }
 }
 
@@ -261,11 +291,13 @@ async function loadSession() {
     const data = await response.json();
     currentUser = data.authenticated ? data.user : null;
     if (currentUser) renderAccount();
-    musicComposer.hidden = !currentUser?.isMember;
+    musicComposer.hidden = true;
+    musicOpenComposer.hidden = !currentUser?.isMember;
     musicMemberGate.hidden = Boolean(currentUser?.isMember);
     musicInvite.href = data.inviteUrl || 'https://discord.gg/celes';
   } catch {
     musicComposer.hidden = true;
+    musicOpenComposer.hidden = true;
     musicMemberGate.hidden = false;
   }
 }
@@ -289,6 +321,8 @@ function initializeRealtime() {
 }
 
 musicForm.addEventListener('submit', submitTrack);
+musicOpenComposer.addEventListener('click', () => setComposerOpen(true));
+musicCloseComposer.addEventListener('click', () => setComposerOpen(false));
 musicPlayerDock.addEventListener('click', (event) => {
   if (event.target.closest('.music-player-close')) return stopPlayer();
   if (event.target.closest('.music-player-toggle')) {
@@ -311,7 +345,10 @@ musicGallery.addEventListener('click', (event) => {
 });
 musicGallery.addEventListener('pointerover', (event) => {
   const card = event.target.closest('.music-card');
-  if (card && musicGallery.contains(card)) applyFocus(card);
+  if (card && musicGallery.contains(card)) {
+    applyFocus(card);
+    startPreview(trackById(card.dataset.trackId));
+  }
 });
 musicGallery.addEventListener('pointerout', (event) => {
   const card = event.target.closest('.music-card');
@@ -319,7 +356,10 @@ musicGallery.addEventListener('pointerout', (event) => {
 });
 musicGallery.addEventListener('focusin', (event) => {
   const card = event.target.closest('.music-card');
-  if (card) applyFocus(card);
+  if (card) {
+    applyFocus(card);
+    startPreview(trackById(card.dataset.trackId));
+  }
 });
 musicGallery.addEventListener('focusout', () => {
   window.setTimeout(() => { if (!musicGallery.contains(document.activeElement)) clearFocus(); }, 0);
