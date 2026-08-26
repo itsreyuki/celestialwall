@@ -159,8 +159,8 @@ function startPreview(track) {
   previewEchoAudio = new Audio(track.sourceUrl);
   previewAudio.preload = 'metadata';
   previewEchoAudio.preload = 'metadata';
-  previewAudio.volume = 0.22;
-  previewEchoAudio.volume = 0.07;
+  previewAudio.volume = 0.05;
+  previewEchoAudio.volume = 0.018;
   previewAudio.addEventListener('ended', stopPreview, { once: true });
   const playFromMiddle = () => {
     if (previewTrackId !== track.id || !previewAudio) return;
