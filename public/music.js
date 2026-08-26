@@ -291,7 +291,7 @@ function openPlayer(track) {
   activeTrackId = track.id;
   const image = track.artworkUrl ? '<img src="' + escapeHtml(track.artworkUrl) + '" alt="" />' : '';
   musicPlayerDock.innerHTML = '<div class="music-player-summary"><div class="music-player-art">' + image + '</div><div><strong>' + escapeHtml(track.title) + '</strong><span>أضافها ' + escapeHtml(track.author?.global_name || track.author?.username || 'عضو سيليستيا') + '</span></div></div>'
-    + '<div class="music-player-controls"><button class="music-player-toggle" type="button" aria-label="إيقاف مؤقت">❚❚</button><div class="music-player-timeline"><input class="music-player-seek" type="range" min="0" max="100" value="0" step="0.1" aria-label="تقدم الأغنية" /><div><span class="music-player-current">0:00</span><span class="music-player-duration">--:--</span></div></div><button class="music-player-close" type="button">إيقاف</button></div>';
+    + '<div class="music-player-controls"><button class="music-player-toggle" type="button" aria-label="إيقاف مؤقت">❚❚</button><div class="music-player-timeline"><input class="music-player-seek" type="range" min="0" max="100" value="0" step="0.1" aria-label="تقدم الأغنية" /><div><span class="music-player-current">0:00</span><span class="music-player-duration">--:--</span></div></div><div class="music-player-extra-controls"><label class="music-player-volume" title="مستوى الصوت"><span aria-hidden="true">◖</span><input class="music-player-volume-input" type="range" min="0" max="100" value="100" aria-label="مستوى الصوت" /></label><button class="music-player-loop" type="button" aria-label="تفعيل التكرار" aria-pressed="false">↻</button></div><button class="music-player-close" type="button">إيقاف</button></div>';
   musicPlayerDock.hidden = false;
   activeAudio = new Audio(track.sourceUrl);
   activeAudio.preload = 'metadata';
@@ -410,15 +410,29 @@ musicOpenComposer.addEventListener('click', () => setComposerOpen(true));
 musicCloseComposer.addEventListener('click', () => setComposerOpen(false));
 musicPlayerDock.addEventListener('click', (event) => {
   if (event.target.closest('.music-player-close')) return stopPlayer();
+  const loopButton = event.target.closest('.music-player-loop');
+  if (loopButton && activeAudio) {
+    activeAudio.loop = !activeAudio.loop;
+    loopButton.classList.toggle('is-active', activeAudio.loop);
+    loopButton.setAttribute('aria-pressed', String(activeAudio.loop));
+    loopButton.setAttribute('aria-label', activeAudio.loop ? 'إيقاف التكرار' : 'تفعيل التكرار');
+    return;
+  }
   if (event.target.closest('.music-player-toggle')) {
     if (activeAudio?.paused) activeAudio.play().catch(() => undefined);
     else activeAudio?.pause();
   }
 });
 musicPlayerDock.addEventListener('input', (event) => {
-  if (!event.target.matches('.music-player-seek') || !activeAudio || !Number.isFinite(activeAudio.duration)) return;
-  activeAudio.currentTime = (Number(event.target.value) / 100) * activeAudio.duration;
-  updateProgressUi();
+  if (!activeAudio) return;
+  if (event.target.matches('.music-player-volume-input')) {
+    activeAudio.volume = Number(event.target.value) / 100;
+    return;
+  }
+  if (event.target.matches('.music-player-seek') && Number.isFinite(activeAudio.duration)) {
+    activeAudio.currentTime = (Number(event.target.value) / 100) * activeAudio.duration;
+    updateProgressUi();
+  }
 });
 musicGallery.addEventListener('click', (event) => {
   const deleteButton = event.target.closest('[data-delete-track]');
