@@ -59,18 +59,32 @@ function cleanupFiles(filePaths) {
 
 async function convertToMp3(inputPath, outputPath) {
   const binary = process.env.FFMPEG_PATH || ffmpegPath;
-  if (!binary) throw new Error('محول الصوت غير متاح على الخادم حالياً.');
+  if (!binary) {
+    const error = new Error('محول الصوت غير متاح على الخادم حالياً.');
+    error.status = 503;
+    error.expose = true;
+    throw error;
+  }
   try {
     await execFileAsync(binary, [
       '-nostdin', '-y', '-i', inputPath,
       '-vn', '-map', '0:a:0?', '-codec:a', 'libmp3lame', '-b:a', '192k', outputPath
     ], { timeout: 120000, maxBuffer: 1024 * 1024 });
-  } catch {
-    throw new Error('تعذّر تحويل الملف. تأكد أنه يحتوي على مسار صوت صالح.');
+  } catch (cause) {
+    console.error('FFmpeg conversion failed:', cause.message);
+    const error = new Error('تعذّر تحويل الملف. تأكد أنه يحتوي على مسار صوت صالح.');
+    error.status = 422;
+    error.expose = true;
+    throw error;
   }
 
   const info = await fsp.stat(outputPath).catch(() => null);
-  if (!info?.size) throw new Error('الملف المرفوع لا يحتوي على صوت قابل للتشغيل.');
+  if (!info?.size) {
+    const error = new Error('الملف المرفوع لا يحتوي على صوت قابل للتشغيل.');
+    error.status = 422;
+    error.expose = true;
+    throw error;
+  }
 }
 
 router.get('/tracks', async (req, res, next) => {
@@ -131,7 +145,10 @@ router.post('/tracks', requireMember, upload.fields([
     return res.status(201).json({ track });
   } catch (error) {
     if (trackId) await deleteMusicFiles(trackId).catch(() => undefined);
-    return next(error);
+    console.error('Music upload failed:', error);
+    return res.status(error.status || 500).json({
+      error: error.expose ? error.message : 'تعذّر حفظ الأغنية في الخادم. راجع سجل Render لمعرفة السبب.'
+    });
   } finally {
     await cleanupFiles([media?.path, poster?.path, convertedPath]);
   }

@@ -7,6 +7,13 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const localDirectory = path.join(__dirname, '..', 'data', 'music');
 const coverExtensions = ['jpg', 'jpeg', 'png', 'webp'];
 
+function storageError(message, status = 503) {
+  const error = new Error(message);
+  error.status = status;
+  error.expose = true;
+  return error;
+}
+
 function usesSupabaseStorage() {
   return Boolean(supabaseUrl && supabaseServiceKey);
 }
@@ -20,15 +27,22 @@ function storageHeaders(contentType) {
 }
 
 async function ensureBucket() {
+  const existing = await fetch(`${supabaseUrl}/storage/v1/bucket/${bucket}`, {
+    headers: storageHeaders()
+  });
+  if (existing.ok) return;
+  if (existing.status !== 404) {
+    throw storageError('تعذّر الوصول إلى مساحة تخزين الموسيقى في Supabase. تحقّق من رابط المشروع ومفتاح الخدمة.');
+  }
+
   const response = await fetch(`${supabaseUrl}/storage/v1/bucket`, {
     method: 'POST',
-    headers: { ...storageHeaders('application/json'), 'x-upsert': 'true' },
+    headers: storageHeaders('application/json'),
     body: JSON.stringify({ id: bucket, name: bucket, public: true })
   });
 
-  // 409 is expected after the first creation, and is safe to ignore.
-  if (!response.ok && response.status !== 409) {
-    throw new Error('تعذّر تجهيز مساحة تخزين الموسيقى في Supabase.');
+  if (!response.ok) {
+    throw storageError('تعذّر إنشاء مساحة تخزين الموسيقى في Supabase.');
   }
 }
 
@@ -40,7 +54,7 @@ async function uploadToSupabase(objectPath, filePath, mimeType) {
     headers: { ...storageHeaders(mimeType), 'x-upsert': 'true' },
     body
   });
-  if (!response.ok) throw new Error('تعذّر رفع ملف الموسيقى إلى Supabase.');
+  if (!response.ok) throw storageError('تعذّر رفع ملف الموسيقى إلى Supabase. تحقّق من صلاحية Service Role وحدود التخزين.');
   return `${supabaseUrl}/storage/v1/object/public/${bucket}/${objectPath}`;
 }
 
@@ -64,7 +78,7 @@ async function storeMusicFiles({ trackId, audioPath, posterPath, posterExtension
   }
 
   if (process.env.NODE_ENV === 'production') {
-    throw new Error('أضف SUPABASE_URL وSUPABASE_SERVICE_ROLE_KEY لتخزين ملفات الموسيقى بشكل دائم.');
+    throw storageError('أضف SUPABASE_URL وSUPABASE_SERVICE_ROLE_KEY لتخزين ملفات الموسيقى بشكل دائم.');
   }
 
   const [sourceUrl, artworkUrl] = await Promise.all([
