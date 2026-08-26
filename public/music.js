@@ -3,6 +3,7 @@ const musicCount = document.querySelector('#music-count');
 const musicComposer = document.querySelector('#music-composer');
 const musicOpenComposer = document.querySelector('#music-open-composer');
 const musicCloseComposer = document.querySelector('#music-close-composer');
+const musicEnablePreviews = document.querySelector('#music-enable-previews');
 const musicMemberGate = document.querySelector('#music-member-gate');
 const musicInvite = document.querySelector('#music-invite');
 const musicForm = document.querySelector('#music-form');
@@ -27,6 +28,7 @@ let activeAudio = null;
 let previewTrackId = null;
 let previewAudio = null;
 let previewAudioContext = null;
+let previewEnabled = false;
 let musicSocket = null;
 
 function escapeHtml(value) {
@@ -148,7 +150,12 @@ function getPreviewAudioContext() {
 
 function unlockPreviewAudio() {
   const context = getPreviewAudioContext();
-  context?.resume?.().catch(() => undefined);
+  context?.resume?.()
+    .then(() => {
+      previewEnabled = context.state === 'running';
+      if (previewEnabled) musicEnablePreviews.hidden = true;
+    })
+    .catch(() => undefined);
 }
 
 function addPreviewReverb(audio) {
@@ -186,11 +193,12 @@ document.addEventListener('pointerdown', unlockPreviewAudio, { passive: true });
 document.addEventListener('keydown', unlockPreviewAudio, { passive: true });
 
 function startPreview(track) {
-  if (!track || previewTrackId === track.id || (activeAudio && !activeAudio.paused)) return;
+  if (!previewEnabled || !track || previewTrackId === track.id || (activeAudio && !activeAudio.paused)) return;
   stopPreview();
   previewTrackId = track.id;
   previewAudio = new Audio(track.sourceUrl);
   previewAudio.preload = 'metadata';
+  previewAudio.muted = true;
   previewAudio.volume = 0.14;
   addPreviewReverb(previewAudio);
   previewAudio.addEventListener('ended', stopPreview, { once: true });
@@ -199,8 +207,12 @@ function startPreview(track) {
     if (Number.isFinite(previewAudio.duration) && previewAudio.duration > 2) {
       previewAudio.currentTime = Math.min(previewAudio.duration - 1, previewAudio.duration * 0.5);
     }
-    // Some browsers require a previous user interaction before allowing this preview.
-    previewAudio.play().catch(stopPreview);
+    // Start muted, then fade in after the explicit preview activation to satisfy autoplay rules.
+    previewAudio.play()
+      .then(() => {
+        if (previewTrackId === track.id && previewAudio) previewAudio.muted = false;
+      })
+      .catch(stopPreview);
   };
   if (previewAudio.readyState >= 1) playFromMiddle();
   else previewAudio.addEventListener('loadedmetadata', playFromMiddle, { once: true });
@@ -369,6 +381,7 @@ function initializeRealtime() {
 musicForm.addEventListener('submit', submitTrack);
 musicOpenComposer.addEventListener('click', () => setComposerOpen(true));
 musicCloseComposer.addEventListener('click', () => setComposerOpen(false));
+musicEnablePreviews.addEventListener('click', unlockPreviewAudio);
 musicPlayerDock.addEventListener('click', (event) => {
   if (event.target.closest('.music-player-close')) return stopPlayer();
   if (event.target.closest('.music-player-toggle')) {
