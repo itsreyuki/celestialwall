@@ -27,7 +27,7 @@ let activeTrackId = null;
 let activeAudio = null;
 let previewTrackId = null;
 let previewAudio = null;
-let previewAudioContext = null;
+let previewEchoAudio = null;
 let previewEnabled = false;
 let musicSocket = null;
 
@@ -135,60 +135,19 @@ function applyFocus(card) {
 
 function stopPreview() {
   previewAudio?.pause();
+  previewEchoAudio?.pause();
   previewAudio = null;
+  previewEchoAudio = null;
   previewTrackId = null;
 }
 
-function getPreviewAudioContext() {
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextClass) return null;
-  if (!previewAudioContext || previewAudioContext.state === 'closed') {
-    previewAudioContext = new AudioContextClass();
-  }
-  return previewAudioContext;
-}
-
 function unlockPreviewAudio() {
-  const context = getPreviewAudioContext();
-  context?.resume?.()
-    .then(() => {
-      previewEnabled = context.state === 'running';
-      if (previewEnabled) musicEnablePreviews.hidden = true;
-    })
-    .catch(() => undefined);
-}
-
-function addPreviewReverb(audio) {
-  try {
-    const context = getPreviewAudioContext();
-    if (!context) return;
-    context.resume().catch(() => undefined);
-    const source = context.createMediaElementSource(audio);
-    const convolver = context.createConvolver();
-    const dry = context.createGain();
-    const wet = context.createGain();
-    const duration = 1.45;
-    const impulse = context.createBuffer(2, Math.floor(context.sampleRate * duration), context.sampleRate);
-    for (let channel = 0; channel < impulse.numberOfChannels; channel += 1) {
-      const samples = impulse.getChannelData(channel);
-      for (let index = 0; index < samples.length; index += 1) {
-        const envelope = Math.pow(1 - (index / samples.length), 2.8);
-        samples[index] = (Math.random() * 2 - 1) * envelope;
-      }
-    }
-    convolver.buffer = impulse;
-    dry.gain.value = 0.68;
-    wet.gain.value = 0.38;
-    source.connect(dry).connect(context.destination);
-    source.connect(convolver).connect(wet).connect(context.destination);
-    previewAudioContext = context;
-  } catch {
-    // The quiet preview still works in browsers without Web Audio support.
-  }
+  previewEnabled = true;
+  musicEnablePreviews.hidden = true;
 }
 
 // Hover alone cannot start audio in modern browsers. A normal click or touch unlocks
-// the shared audio context once, then the soft hover previews can play afterwards.
+// previews once, then native audio elements can play quietly on later hovers.
 document.addEventListener('pointerdown', unlockPreviewAudio, { passive: true });
 document.addEventListener('keydown', unlockPreviewAudio, { passive: true });
 
@@ -197,21 +156,22 @@ function startPreview(track) {
   stopPreview();
   previewTrackId = track.id;
   previewAudio = new Audio(track.sourceUrl);
+  previewEchoAudio = new Audio(track.sourceUrl);
   previewAudio.preload = 'metadata';
-  previewAudio.muted = true;
-  previewAudio.volume = 0.14;
-  addPreviewReverb(previewAudio);
+  previewEchoAudio.preload = 'metadata';
+  previewAudio.volume = 0.38;
+  previewEchoAudio.volume = 0.14;
   previewAudio.addEventListener('ended', stopPreview, { once: true });
   const playFromMiddle = () => {
     if (previewTrackId !== track.id || !previewAudio) return;
-    if (Number.isFinite(previewAudio.duration) && previewAudio.duration > 2) {
-      previewAudio.currentTime = Math.min(previewAudio.duration - 1, previewAudio.duration * 0.5);
+    const duration = Number.isFinite(previewAudio.duration) ? previewAudio.duration : 0;
+    const middle = duration > 2 ? Math.min(duration - 1, duration * 0.5) : 0;
+    previewAudio.currentTime = middle;
+    if (previewEchoAudio) {
+      previewEchoAudio.currentTime = duration > 2 ? Math.min(duration - 0.1, middle + 0.16) : 0;
     }
-    // Start muted, then fade in after the explicit preview activation to satisfy autoplay rules.
-    previewAudio.play()
-      .then(() => {
-        if (previewTrackId === track.id && previewAudio) previewAudio.muted = false;
-      })
+    // A second, softly delayed native player creates a reliable echo effect.
+    Promise.all([previewAudio.play(), previewEchoAudio?.play()])
       .catch(stopPreview);
   };
   if (previewAudio.readyState >= 1) playFromMiddle();
