@@ -3,7 +3,6 @@ const musicCount = document.querySelector('#music-count');
 const musicComposer = document.querySelector('#music-composer');
 const musicOpenComposer = document.querySelector('#music-open-composer');
 const musicCloseComposer = document.querySelector('#music-close-composer');
-const musicEnablePreviews = document.querySelector('#music-enable-previews');
 const musicMemberGate = document.querySelector('#music-member-gate');
 const musicInvite = document.querySelector('#music-invite');
 const musicForm = document.querySelector('#music-form');
@@ -28,7 +27,7 @@ let activeAudio = null;
 let previewTrackId = null;
 let previewAudio = null;
 let previewEchoAudio = null;
-let previewEnabled = false;
+let previewEnabled = true;
 let musicSocket = null;
 
 function escapeHtml(value) {
@@ -69,7 +68,9 @@ function cardMarkup(track) {
 
 function renderRow(items, reverse = false) {
   if (!items.length) return '';
-  const cards = [...items, ...items, ...items].map(cardMarkup).join('');
+  const groupWidth = Math.max(1, items.length) * 288;
+  const repeats = Math.max(8, Math.ceil((window.innerWidth * 2) / groupWidth) * 2);
+  const cards = Array.from({ length: repeats }, () => items).flat().map(cardMarkup).join('');
   return '<div class="music-row' + (reverse ? ' music-row-reverse' : '') + '"><div class="music-row-track">' + cards + '</div></div>';
 }
 
@@ -143,7 +144,6 @@ function stopPreview() {
 
 function unlockPreviewAudio() {
   previewEnabled = true;
-  musicEnablePreviews.hidden = true;
 }
 
 // Hover alone cannot start audio in modern browsers. A normal click or touch unlocks
@@ -159,8 +159,8 @@ function startPreview(track) {
   previewEchoAudio = new Audio(track.sourceUrl);
   previewAudio.preload = 'metadata';
   previewEchoAudio.preload = 'metadata';
-  previewAudio.volume = 0.38;
-  previewEchoAudio.volume = 0.14;
+  previewAudio.volume = 0.22;
+  previewEchoAudio.volume = 0.07;
   previewAudio.addEventListener('ended', stopPreview, { once: true });
   const playFromMiddle = () => {
     if (previewTrackId !== track.id || !previewAudio) return;
@@ -341,7 +341,6 @@ function initializeRealtime() {
 musicForm.addEventListener('submit', submitTrack);
 musicOpenComposer.addEventListener('click', () => setComposerOpen(true));
 musicCloseComposer.addEventListener('click', () => setComposerOpen(false));
-musicEnablePreviews.addEventListener('click', unlockPreviewAudio);
 musicPlayerDock.addEventListener('click', (event) => {
   if (event.target.closest('.music-player-close')) return stopPlayer();
   if (event.target.closest('.music-player-toggle')) {
@@ -383,5 +382,11 @@ musicGallery.addEventListener('focusin', (event) => {
 musicGallery.addEventListener('focusout', () => {
   window.setTimeout(() => { if (!musicGallery.contains(document.activeElement)) clearFocus(); }, 0);
 });
+
+let galleryResizeTimer = null;
+window.addEventListener('resize', () => {
+  window.clearTimeout(galleryResizeTimer);
+  galleryResizeTimer = window.setTimeout(renderTracks, 180);
+}, { passive: true });
 
 Promise.all([loadSession(), loadTracks()]).finally(initializeRealtime);
