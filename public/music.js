@@ -26,6 +26,7 @@ let activeTrackId = null;
 let activeAudio = null;
 let previewTrackId = null;
 let previewAudio = null;
+let previewAudioContext = null;
 let musicSocket = null;
 
 function escapeHtml(value) {
@@ -55,10 +56,9 @@ function cardMarkup(track) {
   const image = track.artworkUrl ? '<img src="' + escapeHtml(track.artworkUrl) + '" alt="غلاف ' + escapeHtml(track.title) + '" loading="lazy" />' : '';
   const remove = isOwner(track) ? '<button class="music-delete" type="button" data-delete-track="' + escapeHtml(track.id) + '">حذف</button>' : '';
   const comment = track.comment ? '<p class="music-comment">' + escapeHtml(track.comment) + '</p>' : '';
-  const active = activeTrackId === track.id ? ' is-playing' : '';
-  return '<article class="music-card provider-local' + active + '" data-track-id="' + escapeHtml(track.id) + '" tabindex="0">'
+  return '<article class="music-card provider-local" data-track-id="' + escapeHtml(track.id) + '" tabindex="0">'
     + '<div class="music-art">' + image + '<span class="music-provider">CELESTIAL</span>'
-    + '<button class="music-play-circle" type="button" data-play-track="' + escapeHtml(track.id) + '" aria-label="تشغيل ' + escapeHtml(track.title) + '"><span>' + (active ? '❚❚' : '▶') + '</span></button></div>'
+    + '<button class="music-play-circle" type="button" data-play-track="' + escapeHtml(track.id) + '" aria-label="تشغيل ' + escapeHtml(track.title) + '"><span>▶</span></button></div>'
     + '<div class="music-card-body"><div class="music-card-heading"><div><h3 class="music-card-title" title="' + escapeHtml(track.title) + '">' + escapeHtml(track.title) + '</h3>'
     + '<p class="music-author">أضافها ' + escapeHtml(track.author?.global_name || track.author?.username || 'عضو سيليستيا') + '</p></div>' + remove + '</div>'
     + comment + '<div class="music-progress" aria-label="تقدم التشغيل"><span class="music-progress-fill"></span></div>'
@@ -135,18 +135,58 @@ function stopPreview() {
   previewAudio?.pause();
   previewAudio = null;
   previewTrackId = null;
+  previewAudioContext?.close?.().catch(() => undefined);
+  previewAudioContext = null;
+}
+
+function addPreviewReverb(audio) {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return;
+  try {
+    const context = new AudioContextClass();
+    const source = context.createMediaElementSource(audio);
+    const convolver = context.createConvolver();
+    const dry = context.createGain();
+    const wet = context.createGain();
+    const duration = 1.45;
+    const impulse = context.createBuffer(2, Math.floor(context.sampleRate * duration), context.sampleRate);
+    for (let channel = 0; channel < impulse.numberOfChannels; channel += 1) {
+      const samples = impulse.getChannelData(channel);
+      for (let index = 0; index < samples.length; index += 1) {
+        const envelope = Math.pow(1 - (index / samples.length), 2.8);
+        samples[index] = (Math.random() * 2 - 1) * envelope;
+      }
+    }
+    convolver.buffer = impulse;
+    dry.gain.value = 0.68;
+    wet.gain.value = 0.38;
+    source.connect(dry).connect(context.destination);
+    source.connect(convolver).connect(wet).connect(context.destination);
+    previewAudioContext = context;
+  } catch {
+    // The quiet preview still works in browsers without Web Audio support.
+  }
 }
 
 function startPreview(track) {
-  if (!track || activeTrackId === track.id || previewTrackId === track.id) return;
+  if (!track || previewTrackId === track.id || (activeAudio && !activeAudio.paused)) return;
   stopPreview();
   previewTrackId = track.id;
   previewAudio = new Audio(track.sourceUrl);
   previewAudio.preload = 'metadata';
   previewAudio.volume = 0.14;
+  addPreviewReverb(previewAudio);
   previewAudio.addEventListener('ended', stopPreview, { once: true });
-  // Some browsers require a previous user interaction before allowing this preview.
-  previewAudio.play().catch(stopPreview);
+  const playFromMiddle = () => {
+    if (previewTrackId !== track.id || !previewAudio) return;
+    if (Number.isFinite(previewAudio.duration) && previewAudio.duration > 2) {
+      previewAudio.currentTime = Math.min(previewAudio.duration - 1, previewAudio.duration * 0.5);
+    }
+    // Some browsers require a previous user interaction before allowing this preview.
+    previewAudio.play().catch(stopPreview);
+  };
+  if (previewAudio.readyState >= 1) playFromMiddle();
+  else previewAudio.addEventListener('loadedmetadata', playFromMiddle, { once: true });
 }
 
 function clearFocus(card) {
@@ -159,15 +199,6 @@ function updateProgressUi() {
   if (!activeTrackId || !activeAudio) return;
   const duration = Number.isFinite(activeAudio.duration) ? activeAudio.duration : 0;
   const current = activeAudio.currentTime || 0;
-  const progress = duration ? Math.min(100, (current / duration) * 100) : 0;
-  musicGallery.querySelectorAll('.music-card').forEach((card) => {
-    if (card.dataset.trackId !== activeTrackId) return;
-    card.querySelector('.music-progress-fill')?.style.setProperty('--progress', progress + '%');
-    const now = card.querySelector('.music-current-time');
-    const total = card.querySelector('.music-duration');
-    if (now) now.textContent = formatTime(current);
-    if (total) total.textContent = duration ? formatTime(duration) : '--:--';
-  });
   const range = musicPlayerDock.querySelector('.music-player-seek');
   const now = musicPlayerDock.querySelector('.music-player-current');
   const total = musicPlayerDock.querySelector('.music-player-duration');
@@ -182,7 +213,6 @@ function stopPlayer() {
   activeTrackId = null;
   musicPlayerDock.hidden = true;
   musicPlayerDock.replaceChildren();
-  renderTracks();
 }
 
 function setPlayerButton(isPlaying) {
@@ -216,7 +246,6 @@ function openPlayer(track) {
   activeAudio.addEventListener('ended', () => stopPlayer());
   activeAudio.addEventListener('error', () => showFormNotice('تعذّر تشغيل هذا الملف.'));
   activeAudio.play().catch(() => setPlayerButton(false));
-  renderTracks();
 }
 
 function upsertTrack(track) {
