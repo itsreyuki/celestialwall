@@ -175,7 +175,6 @@ function uploadTrack(formData) {
     request.responseType = 'json';
     request.upload.addEventListener('progress', (event) => {
       if (!event.lengthComputable) return;
-      // Leave a little space while the server converts the upload and saves it.
       const percent = Math.min(90, (event.loaded / event.total) * 90);
       setUploadProgress(percent, 'جارٍ رفع الملف...');
     });
@@ -213,8 +212,6 @@ function unlockPreviewAudio() {
   previewEnabled = true;
 }
 
-// Hover alone cannot start audio in modern browsers. A normal click or touch unlocks
-// previews once, then native audio elements can play quietly on later hovers.
 document.addEventListener('pointerdown', unlockPreviewAudio, { passive: true });
 document.addEventListener('keydown', unlockPreviewAudio, { passive: true });
 
@@ -237,7 +234,6 @@ function startPreview(track) {
     if (previewEchoAudio) {
       previewEchoAudio.currentTime = duration > 2 ? Math.min(duration - 0.1, middle + 0.16) : 0;
     }
-    // A second, softly delayed native player creates a reliable echo effect.
     Promise.all([previewAudio.play(), previewEchoAudio?.play()])
       .catch(stopPreview);
   };

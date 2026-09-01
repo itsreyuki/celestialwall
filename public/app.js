@@ -429,9 +429,6 @@ async function applySavedCanvasState(state) {
     applyingRemoteChange = false;
   }
 
-  // Keep a modest horizontal travel area even on very wide screens. This is
-  // deliberately done after the initial state has finished applying so the
-  // resulting world size is shared with the other connected members.
   window.requestAnimationFrame(ensureHorizontalPanRoom);
 }
 
@@ -706,7 +703,6 @@ function updateObjectInteractivity(selectable) {
   wallCanvas.selection = selectable;
   wallCanvas.forEachObject((object) => {
     object.selectable = selectable && isOwnedByCurrentUser(object);
-    // Keep remote objects evented so their creator tooltip still appears on hover.
     object.evented = true;
   });
   if (wallCanvas.getActiveObject() && !isOwnedByCurrentUser(wallCanvas.getActiveObject())) {

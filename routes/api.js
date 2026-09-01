@@ -3,7 +3,6 @@ const crypto = require('crypto');
 
 const router = express.Router();
 
-// تخزين مؤقت للتجربة؛ استبدله بقاعدة بيانات في بيئة الإنتاج.
 const messages = [
   {
     id: crypto.randomUUID(),

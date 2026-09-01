@@ -20,8 +20,6 @@ const port = Number(process.env.PORT) || 3000;
 const sessionSecret = process.env.SESSION_SECRET || 'development-secret-change-me';
 const databasePool = getDatabasePool();
 
-// Render terminates HTTPS at its proxy and forwards the request to Node over HTTP.
-// Trusting the proxy allows express-session to set secure cookies correctly.
 app.set('trust proxy', 1);
 
 const allowedOrigin = process.env.CLIENT_URL || `http://localhost:${port}`;
@@ -306,7 +304,6 @@ io.on('connection', (socket) => {
   const relayToOtherClients = (eventName, payload) => {
     if (!canUseWall || !payload || typeof payload !== 'object') return;
 
-    // broadcast يستثني socket المرسل، وsenderId يضيف طبقة حماية للعميل.
     socket.broadcast.emit(eventName, {
       ...payload,
       senderId: socket.id
@@ -423,7 +420,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// يتيح لمسار API نشر الرسائل الجديدة لجميع العملاء المتصلين.
 app.set('io', io);
 app.set('musicIo', musicIo);
 
