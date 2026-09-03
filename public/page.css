@@ -47,6 +47,14 @@ body .public-text { width: 100%; height: 100%; padding: 4px; white-space: pre-wr
 body .public-social-links { display: block; }
 body .public-social-links .public-links { display: grid; gap: 8px; width: 100%; }
 body .public-social-links .public-links a { border: 1px solid rgba(241,199,94,.24); border-radius: 10px; padding: .64em; color: #fff6de; background: rgba(255,255,255,.06); font-size: inherit; text-align: center; text-decoration: none; }
+body .public-social-links .button-preset-bubble a { border: 1px solid rgba(255,255,255,.2); border-radius: 999px; padding: .78em 1.1em; background: linear-gradient(145deg, color-mix(in srgb, var(--button-background) 72%, white), color-mix(in srgb, var(--button-background) 78%, #281536)); box-shadow: inset 0 1px 1px rgba(255,255,255,.34), 0 .45em 1em color-mix(in srgb, var(--button-background) 36%, transparent); }
+body .public-social-links .button-preset-flat a { border: 0; border-radius: .45em; background: var(--button-background); box-shadow: none; }
+body .public-social-links .button-preset-glass a { border-color: rgba(255,255,255,.25); background: color-mix(in srgb, var(--button-background) 22%, transparent); box-shadow: inset 0 1px 0 rgba(255,255,255,.18); backdrop-filter: blur(14px); }
+body .public-social-links .button-preset-outline a { border: 2px solid var(--button-background); background: transparent; box-shadow: none; }
+body .public-social-links .button-preset-pill a { border: 0; border-radius: 999px; padding-inline: 1.25em; background: var(--button-background); box-shadow: 0 .25em .75em rgba(0,0,0,.26); }
+body .public-social-links .button-preset-neon a { border: 1px solid var(--button-background); background: color-mix(in srgb, var(--button-background) 10%, #09060f); box-shadow: inset 0 0 .6em color-mix(in srgb, var(--button-background) 24%, transparent), 0 0 .8em color-mix(in srgb, var(--button-background) 72%, transparent); text-shadow: 0 0 .45em currentColor; }
+body .public-social-links .button-preset-minimal a { border: 0; border-radius: 0; border-bottom: 1px solid currentColor; padding: .42em .2em; background: transparent; box-shadow: none; }
+body .public-social-links .public-links a:hover, body .public-social-links .public-links a:focus-visible { filter: brightness(1.12); transform: translateY(-2px) scale(1.015); }
 body .public-image { overflow: hidden; }
 body .public-image img { width: 100%; height: 100%; object-fit: cover; }
 body .public-image.image-animation-float img { animation: public-image-float 3.4s ease-in-out infinite; }

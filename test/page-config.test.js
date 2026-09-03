@@ -138,10 +138,16 @@ test('social link elements can persist isolated links', () => {
   const configuration = createDefaultPageConfiguration();
   configuration.elements.push({
     id: 'isolated-links', type: 'social-links', position: { x: 50, y: 75 }, size: { width: 48, height: 10 },
-    zIndex: 2, visible: true, style: { color: '#f5ce6b' },
+    zIndex: 2, visible: true, style: { color: '#f5ce6b', backgroundColor: '#8658c7', buttonPreset: 'bubble' },
     links: [{ id: 'isolated-link', label: 'Discord', url: 'https://discord.gg/celes', icon: 'discord', display: 'both', visible: true }]
   });
   assert.equal(validatePageConfiguration(configuration).success, true);
   configuration.elements[1].links[0].url = 'javascript:alert(1)';
+  assert.equal(validatePageConfiguration(configuration).success, false);
+});
+
+test('social button presets are restricted to built-in styles', () => {
+  const configuration = createDefaultPageConfiguration();
+  configuration.elements[0].style.buttonPreset = 'custom-css';
   assert.equal(validatePageConfiguration(configuration).success, false);
 });

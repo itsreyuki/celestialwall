@@ -109,7 +109,7 @@ function applyGeometry(elementNode, element, layout = responsive.resolveElementL
   elementNode.style.transform = `translate(-50%, -50%) scale(${layout.scale})`;
   elementNode.style.textAlign = layout.alignment || '';
   elementNode.style.color = element.style.color || '';
-  elementNode.style.backgroundColor = element.type === 'profile-card' ? '' : (element.style.backgroundColor || '');
+  elementNode.style.backgroundColor = ['profile-card', 'social-links'].includes(element.type) ? '' : (element.style.backgroundColor || '');
   elementNode.style.opacity = element.style.opacity ?? '';
   elementNode.style.borderRadius = element.style.borderRadius !== undefined ? `${element.style.borderRadius}px` : '';
   const previewRect = preview.getBoundingClientRect();
@@ -496,7 +496,8 @@ function contentNode(element, layout) {
   }
   if (element.type === 'social-links') {
     const node = document.createElement('div');
-    node.className = 'editor-social-links';
+    node.className = `editor-social-links button-preset-${element.style.buttonPreset || 'glass'}`;
+    node.style.setProperty('--button-background', element.style.backgroundColor || '#8658c7');
     applyTextStyle(node, linkStyleForElement(element), scale);
     const links = linksForElement(element).length ? linksForElement(element) : [{ label: 'رابطك' }];
     links.filter((link) => link.visible !== false).forEach((link) => {
@@ -836,7 +837,7 @@ function renderInspector() {
   } else if (element.type === 'image') {
     content = `${field('رابط الصورة HTTPS', 'assetUrl', element.assetUrl || '', 'url')}${field('استدارة الحواف', 'style.borderRadius', element.style.borderRadius || 12, 'number', 'min="0" max="100"')}${selectField('ملاءمة الصورة', 'style.objectFit', element.style.objectFit || 'cover', [['cover', 'تغطية'], ['contain', 'احتواء']], 'data-field')}${selectField('موضع الصورة', 'style.objectPosition', element.style.objectPosition || 'center', [['center', 'الوسط'], ['top', 'أعلى'], ['bottom', 'أسفل'], ['left', 'يسار'], ['right', 'يمين']], 'data-field')}`;
   } else if (element.type === 'social-links') {
-    content = `${socialLinksInspectorFields(element)}<fieldset class="inspector-group"><legend>تنسيق الروابط</legend>${textStyleInspectorFields(linkStyleForElement(element), 'style')}</fieldset>`;
+    content = `${socialLinksInspectorFields(element)}<fieldset class="inspector-group"><legend>شكل الأزرار</legend>${selectField('النمط', 'style.buttonPreset', element.style.buttonPreset || 'glass', [['glass', 'زجاجي'], ['bubble', 'فقّاعي'], ['flat', 'مسطّح'], ['outline', 'إطار'], ['pill', 'كبسولة'], ['neon', 'نيون'], ['minimal', 'بسيط']], 'data-field')}${field('لون خلفية الأزرار', 'style.backgroundColor', element.style.backgroundColor || '#8658c7')}</fieldset><fieldset class="inspector-group"><legend>تنسيق الروابط</legend>${textStyleInspectorFields(linkStyleForElement(element), 'style')}</fieldset>`;
   } else if (element.type === 'widget') {
     content = widgetInspectorFields(element);
   }
@@ -1006,7 +1007,7 @@ function addElement(type) {
     const links = state.configuration.socialLinks.length
       ? clone(state.configuration.socialLinks)
       : [{ id: EditorState.createId('link'), label: 'رابط جديد', url: 'https://example.com', icon: 'website', display: 'both', visible: true }];
-    EditorState.addElement(state, { type, size: { width: 48, height: 10 }, style: clone(state.configuration.typography.link), links, tabId });
+    EditorState.addElement(state, { type, size: { width: 48, height: 10 }, style: { ...clone(state.configuration.typography.link), buttonPreset: 'glass', backgroundColor: '#8658c7' }, links, tabId });
   } else if (type === 'text') {
     EditorState.addElement(state, { type, content: 'اكتب هنا...', size: { width: 38, height: 12 }, style: { color: '#fff7dc', fontSize: 20 }, tabId });
   } else if (type === 'image') {

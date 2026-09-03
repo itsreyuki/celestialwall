@@ -95,7 +95,14 @@
  .editor-profile-card p { max-width: 90%; margin: 0; color: #d8cae8; font-size: 10px; line-height: 1.7; }
  .editor-text { align-content: center; padding: 4px; white-space: pre-wrap; }
  .editor-social-links { display: flex; align-items: center; justify-content: center; gap: 5px; padding: 4px; flex-wrap: wrap; }
- .editor-social-link { border: 1px solid rgba(245, 206, 107, .3); border-radius: 7px; padding: .5em .7em; color: inherit; background: rgba(255,255,255,.07); font-size: inherit; }
+.editor-social-link { border: 1px solid rgba(245, 206, 107, .3); border-radius: 7px; padding: .5em .7em; color: inherit; background: rgba(255,255,255,.07); font-size: inherit; }
+.editor-social-links.button-preset-bubble .editor-social-link { border: 1px solid rgba(255,255,255,.2); border-radius: 999px; padding: .62em 1em; background: linear-gradient(145deg, color-mix(in srgb, var(--button-background) 72%, white), color-mix(in srgb, var(--button-background) 78%, #281536)); box-shadow: inset 0 1px 1px rgba(255,255,255,.32), 0 .42em .9em color-mix(in srgb, var(--button-background) 32%, transparent); }
+.editor-social-links.button-preset-flat .editor-social-link { border: 0; border-radius: .42em; background: var(--button-background); box-shadow: none; }
+.editor-social-links.button-preset-glass .editor-social-link { border-color: rgba(255,255,255,.24); background: color-mix(in srgb, var(--button-background) 22%, transparent); box-shadow: inset 0 1px 0 rgba(255,255,255,.16); backdrop-filter: blur(12px); }
+.editor-social-links.button-preset-outline .editor-social-link { border: 2px solid var(--button-background); background: transparent; box-shadow: none; }
+.editor-social-links.button-preset-pill .editor-social-link { border: 0; border-radius: 999px; padding-inline: 1.15em; background: var(--button-background); box-shadow: 0 .22em .65em rgba(0,0,0,.24); }
+.editor-social-links.button-preset-neon .editor-social-link { border: 1px solid var(--button-background); background: color-mix(in srgb, var(--button-background) 10%, #09060f); box-shadow: inset 0 0 .55em color-mix(in srgb, var(--button-background) 24%, transparent), 0 0 .72em color-mix(in srgb, var(--button-background) 72%, transparent); text-shadow: 0 0 .45em currentColor; }
+.editor-social-links.button-preset-minimal .editor-social-link { border: 0; border-radius: 0; border-bottom: 1px solid currentColor; padding: .35em .18em; background: transparent; box-shadow: none; }
  .editor-image { overflow: hidden; border-radius: var(--radius, 12px); background: transparent; }
  .editor-image img { width: 100%; height: 100%; object-fit: cover; }
  .editor-image-placeholder { display: grid; width: 100%; height: 100%; place-items: center; color: #fff1b9; background: linear-gradient(135deg, rgba(139, 88, 222, .68), rgba(229, 177, 57, .5)); font-size: 11px; }

@@ -152,6 +152,7 @@ const elementStyleSchema = z.object({
   effect: z.enum(['none', 'gradient', 'glow', 'shimmer', 'typewriter', 'wave']).optional(),
   objectFit: z.enum(['cover', 'contain']).optional(),
   objectPosition: z.enum(['center', 'top', 'bottom', 'left', 'right']).optional(),
+  buttonPreset: z.enum(['glass', 'bubble', 'flat', 'outline', 'pill', 'neon', 'minimal']).optional(),
   flipX: z.boolean().optional(),
   shadow: z.enum(['none', 'soft', 'strong']).optional(),
   glow: z.boolean().optional(),
