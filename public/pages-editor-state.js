@@ -26,6 +26,50 @@
     };
   }
 
+  function layoutAnchors(layout, scale = 1) {
+    const safeScale = clamp(scale, 0.1, 10);
+    const halfWidth = layout.size.width * safeScale / 2;
+    const halfHeight = layout.size.height * safeScale / 2;
+    return {
+      x: [layout.position.x - halfWidth, layout.position.x, layout.position.x + halfWidth],
+      y: [layout.position.y - halfHeight, layout.position.y, layout.position.y + halfHeight]
+    };
+  }
+
+  function nearestSnap(anchors, targets, threshold) {
+    let best = null;
+    anchors.forEach((anchor) => {
+      targets.forEach((target) => {
+        const delta = target - anchor;
+        if (Math.abs(delta) > threshold || (best && Math.abs(delta) >= Math.abs(best.delta))) return;
+        best = { delta, target };
+      });
+    });
+    return best;
+  }
+
+  function snapLayout(layout, targetLayouts = [], options = {}) {
+    const scale = options.scale ?? layout.scale ?? 1;
+    const anchors = layoutAnchors(layout, scale);
+    const targetX = [0, 50, 100];
+    const targetY = [0, 50, 100];
+    targetLayouts.forEach((targetLayout) => {
+      const targetAnchors = layoutAnchors(targetLayout, targetLayout.scale ?? 1);
+      targetX.push(...targetAnchors.x);
+      targetY.push(...targetAnchors.y);
+    });
+    const xSnap = nearestSnap(anchors.x, targetX, options.thresholdX ?? 1);
+    const ySnap = nearestSnap(anchors.y, targetY, options.thresholdY ?? 1);
+    return {
+      position: {
+        x: layout.position.x + (xSnap?.delta || 0),
+        y: layout.position.y + (ySnap?.delta || 0)
+      },
+      size: { ...layout.size },
+      guides: { x: xSnap?.target ?? null, y: ySnap?.target ?? null }
+    };
+  }
+
   function resizeLayout(layout, pointer, handle = 'se', minimumSize = {}, scale = 1) {
     const safeScale = clamp(scale, 0.1, 10);
     const minimumWidth = clamp(minimumSize.width ?? 1, 1, 100) * safeScale;
@@ -202,6 +246,7 @@
     HISTORY_LIMIT,
     clamp,
     moveLayout,
+    snapLayout,
     resizeLayout,
     resizeLayoutByDelta,
     resizedFontSize,

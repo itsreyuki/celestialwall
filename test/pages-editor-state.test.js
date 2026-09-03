@@ -130,6 +130,44 @@ test('move geometry keeps the complete element inside the canvas', () => {
   });
 });
 
+test('magnetic alignment snaps element centers and edges to the canvas', () => {
+  const centered = EditorState.snapLayout(
+    { position: { x: 49.4, y: 50.6 }, size: { width: 20, height: 10 } },
+    [],
+    { thresholdX: 1, thresholdY: 1 }
+  );
+  assert.deepEqual(centered.position, { x: 50, y: 50 });
+  assert.deepEqual(centered.guides, { x: 50, y: 50 });
+
+  const atEdges = EditorState.snapLayout(
+    { position: { x: 10.7, y: 94.4 }, size: { width: 20, height: 10 } },
+    [],
+    { thresholdX: 1, thresholdY: 1 }
+  );
+  assert.deepEqual(atEdges.position, { x: 10, y: 95 });
+  assert.deepEqual(atEdges.guides, { x: 0, y: 100 });
+});
+
+test('magnetic alignment uses other element edges and respects thresholds', () => {
+  const target = { position: { x: 60, y: 60 }, size: { width: 20, height: 20 }, scale: 1 };
+  const snapped = EditorState.snapLayout(
+    { position: { x: 39.4, y: 60.5 }, size: { width: 20, height: 10 } },
+    [target],
+    { thresholdX: 1, thresholdY: 1 }
+  );
+  assert.equal(snapped.position.x, 40);
+  assert.equal(snapped.position.y, 60);
+  assert.deepEqual(snapped.guides, { x: 50, y: 60 });
+
+  const free = EditorState.snapLayout(
+    { position: { x: 37, y: 42 }, size: { width: 20, height: 10 } },
+    [target],
+    { thresholdX: 0.5, thresholdY: 0.5 }
+  );
+  assert.deepEqual(free.position, { x: 37, y: 42 });
+  assert.deepEqual(free.guides, { x: null, y: null });
+});
+
 test('text font size follows visual resize and remains bounded', () => {
   assert.equal(EditorState.resizedFontSize(20, { width: 40, height: 10 }, { width: 80, height: 20 }), 40);
   assert.equal(EditorState.resizedFontSize(20, { width: 40, height: 10 }, { width: 1, height: 1 }), 10);

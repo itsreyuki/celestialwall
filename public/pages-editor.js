@@ -35,6 +35,7 @@ let inspectorMode = 'content';
 const responsive = window.CelestiaPageResponsive;
 const ELEMENT_LIMIT = 30;
 const RESIZE_HANDLES = ['nw', 'ne', 'sw', 'se'];
+const SNAP_DISTANCE_PX = 8;
 const UPLOAD_LIMITS = { image: 8 * 1024 * 1024, gif: 4 * 1024 * 1024, video: 25 * 1024 * 1024, audio: 15 * 1024 * 1024 };
 
 function mobilePreviewActive() {
@@ -117,6 +118,35 @@ function applyGeometry(elementNode, element, layout = responsive.resolveElementL
     ? '0 14px 28px rgba(0,0,0,.5)'
     : (element.style.shadow === 'soft' ? '0 8px 18px rgba(0,0,0,.3)' : 'none');
   if (element.style.glow) elementNode.style.boxShadow += ', 0 0 20px rgba(241,199,94,.45)';
+}
+
+function clearSnapGuides() {
+  preview.querySelectorAll('.editor-snap-guide, .editor-snap-point').forEach((guide) => guide.remove());
+  preview.querySelectorAll('.editor-element.is-snapped').forEach((element) => element.classList.remove('is-snapped'));
+}
+
+function showSnapGuides(guides, elementNode) {
+  clearSnapGuides();
+  if (guides.x !== null) {
+    const vertical = document.createElement('i');
+    vertical.className = 'editor-snap-guide snap-guide-vertical';
+    vertical.style.left = `${guides.x}%`;
+    preview.append(vertical);
+  }
+  if (guides.y !== null) {
+    const horizontal = document.createElement('i');
+    horizontal.className = 'editor-snap-guide snap-guide-horizontal';
+    horizontal.style.top = `${guides.y}%`;
+    preview.append(horizontal);
+  }
+  if (guides.x !== null && guides.y !== null) {
+    const point = document.createElement('i');
+    point.className = 'editor-snap-point';
+    point.style.left = `${guides.x}%`;
+    point.style.top = `${guides.y}%`;
+    preview.append(point);
+  }
+  if (guides.x !== null || guides.y !== null) elementNode?.classList.add('is-snapped');
 }
 
 function assetPosition(asset) {
@@ -1335,6 +1365,7 @@ function onPointerDown(event) {
   const element = state.configuration.elements.find((item) => item.id === elementNode.dataset.id);
   if (!element) return;
   event.preventDefault();
+  clearSnapGuides();
   if (state.selectedId !== element.id) selectElement(element.id);
   const rect = preview.getBoundingClientRect();
   const mobile = mobilePreviewActive();
@@ -1365,9 +1396,27 @@ function onPointerMove(event) {
   const deltaY = ((event.clientY - pointerAction.startY) / pointerAction.height) * 100;
   const mobile = pointerAction.mobile;
   let nextLayout;
+  let snapGuides = { x: null, y: null };
   if (pointerAction.mode === 'drag') {
     const scale = responsive.resolveElementLayout(element, mobile).scale || 1;
     nextLayout = EditorState.moveLayout(pointerAction.layout, { x: deltaX, y: deltaY }, {}, scale);
+    if (!event.altKey) {
+      const targetLayouts = state.configuration.elements
+        .filter((item) => item.id !== element.id && item.visible !== false && (!state.configuration.tabs.length || !item.tabId || item.tabId === activeTabId))
+        .map((item) => responsive.resolveElementLayout(item, mobile))
+        .filter((layout) => layout.visible);
+      const snapped = EditorState.snapLayout(nextLayout, targetLayouts, {
+        scale,
+        thresholdX: SNAP_DISTANCE_PX / pointerAction.width * 100,
+        thresholdY: SNAP_DISTANCE_PX / pointerAction.height * 100
+      });
+      const bounded = EditorState.moveLayout(snapped, { x: 0, y: 0 }, {}, scale);
+      snapGuides = {
+        x: bounded.position.x === snapped.position.x ? snapped.guides.x : null,
+        y: bounded.position.y === snapped.position.y ? snapped.guides.y : null
+      };
+      nextLayout = bounded;
+    }
     if (mobile) {
       element.mobileOverrides ||= {};
       element.mobileOverrides.mobilePosition = nextLayout.position;
@@ -1402,6 +1451,7 @@ function onPointerMove(event) {
     const layout = responsive.resolveElementLayout(element, mobile);
     applyGeometry(node, element, layout);
     applyContentScale(node, element, layout);
+    if (pointerAction.mode === 'drag') showSnapGuides(snapGuides, node);
   }
 }
 
@@ -1409,6 +1459,7 @@ function onPointerUp(event) {
   if (!pointerAction) return;
   const action = pointerAction;
   pointerAction = null;
+  clearSnapGuides();
   if (preview.hasPointerCapture(event.pointerId)) preview.releasePointerCapture(event.pointerId);
   preview.querySelector(`[data-id="${action.id}"]`)?.classList.remove('is-dragging');
   if (!action.changed) return;

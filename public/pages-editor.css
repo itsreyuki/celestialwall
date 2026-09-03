@@ -75,7 +75,13 @@
  .editor-element.is-hidden { opacity: .22; }
  .editor-element.is-selected { outline: 2px solid #f5ce6b; outline-offset: 0; }
  .editor-element.is-selected::after { position: absolute; z-index: 5; top: -24px; right: 0; border-radius: 5px; padding: 3px 6px; color: #261a32; background: #f5ce6b; content: attr(data-label) " · " attr(data-dimensions); font-family: "Space Grotesk", sans-serif; font-size: 8px; font-weight: 700; white-space: nowrap; }
- .editor-element.is-dragging { cursor: grabbing; }
+.editor-element.is-dragging { cursor: grabbing; }
+.editor-element.is-snapped { outline-color: #fff3ad; box-shadow: 0 0 0 3px rgba(192,128,255,.24), 0 0 18px rgba(241,199,94,.4); }
+.editor-snap-guide { position: absolute; z-index: 180; display: block; pointer-events: none; background: linear-gradient(90deg, transparent, #fff0a5 12%, #bd82ff 50%, #fff0a5 88%, transparent); filter: drop-shadow(0 0 4px rgba(197,133,255,.9)); animation: snap-guide-in .12s ease-out both; }
+.snap-guide-vertical { top: 0; bottom: 0; width: 1px; transform: translateX(-.5px); }
+.snap-guide-horizontal { right: 0; left: 0; height: 1px; transform: translateY(-.5px); }
+.snap-guide-vertical { background: linear-gradient(180deg, transparent, #fff0a5 12%, #bd82ff 50%, #fff0a5 88%, transparent); }
+.editor-snap-point { position: absolute; z-index: 181; width: 8px; height: 8px; border: 2px solid #fff5bc; border-radius: 50%; pointer-events: none; background: #9f64e7; box-shadow: 0 0 12px rgba(241,199,94,.78); transform: translate(-50%, -50%); }
  .resize-handle { position: absolute; z-index: 6; width: 16px; height: 16px; border: 2px solid #fff8df; border-radius: 50%; padding: 0; background: #a56de6; box-shadow: 0 2px 8px rgba(0,0,0,.42); touch-action: none; }
  .resize-handle:hover, .resize-handle:focus-visible { background: #f5ce6b; outline: 2px solid rgba(165,109,230,.7); outline-offset: 2px; }
  .resize-handle.handle-nw { top: -8px; left: -8px; cursor: nwse-resize; }
@@ -226,3 +232,4 @@
 @keyframes image-pulse { 50% { transform: scale(1.045); } }
 @keyframes image-rotate { 50% { transform: rotate(4deg); } }
 @keyframes image-fade { 50% { opacity: .62; } }
+@keyframes snap-guide-in { from { opacity: 0; } to { opacity: 1; } }
