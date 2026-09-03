@@ -296,7 +296,7 @@ function applyContentScale(elementNode, element, layout) {
   const music = elementNode.querySelector('.editor-music');
   if (music) {
     const contentScale = Math.max(.72, Math.min(1.8, scale));
-    music.style.fontSize = `${Math.max(10, Math.round((element.style.fontSize || 14) * contentScale * 10) / 10)}px`;
+    music.style.fontSize = `${Math.max(10, Math.min(18, Math.round((element.style.fontSize || 14) * contentScale * 10) / 10))}px`;
     const cover = music.querySelector('.editor-music-cover');
     const toggle = music.querySelector('.editor-music-toggle');
     const controlSize = Math.max(24, Math.min(34, Math.round(28 * contentScale)));

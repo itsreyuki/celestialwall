@@ -145,11 +145,11 @@ function musicPlayer(config) {
 function scaleMusicPlayer(player, element) {
   const scale = elementVisualScale(element);
   const contentScale = Math.max(.72, Math.min(1.8, scale));
-  player.style.fontSize = `${Math.max(11, Math.round((element.style.fontSize || 14) * contentScale * 10) / 10)}px`;
+  player.style.fontSize = `${Math.max(11, Math.min(18, Math.round((element.style.fontSize || 14) * contentScale * 10) / 10))}px`;
   player.style.padding = `${Math.max(5, Math.min(10, Math.round(7 * contentScale)))}px`;
   const cover = player.querySelector('.player-cover');
   const coverSize = Math.max(34, Math.min(58, Math.round(44 * contentScale)));
-  player.style.gridTemplateColumns = `${coverSize}px minmax(0, 1fr) auto`;
+  player.style.gridTemplateColumns = `auto minmax(0, 1fr) ${coverSize}px`;
   if (cover) { cover.style.width = `${coverSize}px`; cover.style.height = `${coverSize}px`; }
   const toggle = player.querySelector('.player-toggle'); const loop = player.querySelector('.player-loop');
   const toggleSize = Math.max(26, Math.min(34, Math.round(29 * contentScale)));

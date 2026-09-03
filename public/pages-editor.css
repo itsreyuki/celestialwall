@@ -109,10 +109,10 @@
  .editor-image img { width: 100%; height: 100%; object-fit: cover; }
  .editor-image-placeholder { display: grid; width: 100%; height: 100%; place-items: center; color: #fff1b9; background: linear-gradient(135deg, rgba(139, 88, 222, .68), rgba(229, 177, 57, .5)); font-size: 11px; }
  .editor-sticker { place-items: center; color: #fff; font-size: clamp(24px, 4vw, 58px); filter: drop-shadow(0 7px 10px rgba(0,0,0,.35)); }
- .editor-music { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .55em; overflow: hidden; border: 1px solid rgba(245,206,107,.3); border-radius: 11px; padding: .48em; color: #fff0bd; background: radial-gradient(circle at 0 0, rgba(165,99,224,.22), transparent 45%), rgba(20,12,35,.92); box-shadow: inset 0 1px rgba(255,255,255,.07); }
- .editor-music-cover { display: block; width: 38px; height: 38px; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; object-fit: cover; box-shadow: 0 3px 9px rgba(0,0,0,.28); }
- .editor-music-toggle { display: grid; width: 28px; height: 28px; place-items: center; flex: 0 0 auto; border-radius: 50%; color: #2d1b32; background: linear-gradient(145deg, #f6d26d, #d09ae9); box-shadow: 0 3px 9px rgba(0,0,0,.24); }
- .editor-music-details { display: grid; min-width: 0; gap: .4em; overflow: hidden; color: #dfd0ef; font-size: inherit; }
+ .editor-music { grid-template-areas: "toggle details cover"; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; align-content: center; gap: .65em; overflow: hidden; border: 1px solid rgba(245,206,107,.3); border-radius: 11px; padding: .55em; color: #fff0bd; background: radial-gradient(circle at 0 0, rgba(165,99,224,.22), transparent 45%), rgba(20,12,35,.92); box-shadow: inset 0 1px rgba(255,255,255,.07); }
+ .editor-music-cover { grid-area: cover; display: block; width: 38px; height: 38px; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; object-fit: cover; box-shadow: 0 3px 9px rgba(0,0,0,.28); }
+ .editor-music-toggle { grid-area: toggle; display: grid; width: 28px; height: 28px; place-items: center; flex: 0 0 auto; border-radius: 50%; color: #2d1b32; background: linear-gradient(145deg, #f6d26d, #d09ae9); box-shadow: 0 3px 9px rgba(0,0,0,.24); }
+ .editor-music-details { grid-area: details; display: grid; min-width: 0; gap: .45em; overflow: hidden; color: #dfd0ef; font-size: inherit; text-align: right; }
  .editor-music-details strong { overflow: hidden; color: #fff2c4; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
  .editor-music-progress { display: block; width: 100%; height: 3px; border-radius: 999px; background: linear-gradient(90deg, #efbf57 34%, rgba(255,255,255,.16) 34%); }
  .editor-gate { width: min(100% - 32px, 620px); margin: 13vh auto; border: 1px solid rgba(245, 204, 102, .24); border-radius: 22px; padding: 42px; background: rgba(29, 19, 51, .84); text-align: center; }

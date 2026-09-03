@@ -114,12 +114,12 @@ body .widget-guestbook form button { align-self: stretch; border: 0; border-radi
 body .widget-guestbook form button:disabled { opacity: .55; cursor: wait; }
 body .widget-guestbook[data-error]::after { content: attr(data-error); color: #ffb8c7; font-size: .7em; }
 body .public-layout .public-brand { position: absolute; z-index: 40; right: 18px; bottom: 16px; margin: 0; color: #eadcf7; font-family: "Space Grotesk", sans-serif; font-size: 10px; letter-spacing: 1.4px; text-decoration: none; }
-body .celestia-player { position: absolute; z-index: 35; right: 18px; bottom: 44px; display: grid; grid-template-columns: 44px minmax(72px, 1fr) auto; width: min(360px, calc(100% - 36px)); min-width: 0; gap: 7px 9px; align-items: center; overflow: hidden; border: 1px solid rgba(245,206,107,.32); border-radius: 14px; padding: 7px; color: #fff8e6; background: radial-gradient(circle at 0 0, rgba(166,101,224,.2), transparent 42%), rgba(18,11,32,.9); box-shadow: 0 10px 28px rgba(0,0,0,.34), inset 0 1px rgba(255,255,255,.07); backdrop-filter: blur(16px); container-type: inline-size; }
-body .player-cover { display: block; width: 44px; height: 44px; border: 1px solid rgba(255,255,255,.1); border-radius: 9px; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,.28); }
-body .player-details { display: grid; min-width: 0; gap: 5px; align-content: center; }
+body .celestia-player { position: absolute; z-index: 35; right: 18px; bottom: 44px; display: grid; grid-template-areas: "controls details cover"; grid-template-columns: auto minmax(72px, 1fr) 44px; width: min(360px, calc(100% - 36px)); min-width: 0; gap: 7px 9px; align-items: center; align-content: center; overflow: hidden; border: 1px solid rgba(245,206,107,.32); border-radius: 14px; padding: 7px; color: #fff8e6; background: radial-gradient(circle at 0 0, rgba(166,101,224,.2), transparent 42%), rgba(18,11,32,.9); box-shadow: 0 10px 28px rgba(0,0,0,.34), inset 0 1px rgba(255,255,255,.07); backdrop-filter: blur(16px); container-type: inline-size; }
+body .player-cover { grid-area: cover; display: block; width: 44px; height: 44px; border: 1px solid rgba(255,255,255,.1); border-radius: 9px; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,.28); }
+body .player-details { grid-area: details; display: grid; min-width: 0; gap: 5px; align-content: center; text-align: right; }
 body .player-details strong { overflow: hidden; color: #fff4ce; font-size: 1em; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
 body .player-timeline { display: grid; grid-template-columns: minmax(24px,1fr) auto; min-width: 0; gap: 6px; align-items: center; }
-body .player-controls { display: grid; grid-template-columns: auto var(--player-volume-width, 54px) auto; gap: 5px; align-items: center; }
+body .player-controls { grid-area: controls; display: grid; grid-template-columns: auto var(--player-volume-width, 54px) auto; gap: 5px; align-items: center; }
 body .player-controls button { display: grid; flex: 0 0 auto; place-items: center; border: 0; color: #281936; background: linear-gradient(145deg, #f6d26d, #d09ae9); box-shadow: 0 3px 9px rgba(0,0,0,.24); cursor: pointer; font-weight: 800; }
 body .player-toggle { width: 29px; height: 29px; border-radius: 50%; }
 body .player-loop { width: 27px; height: 27px; border-radius: 7px; }
