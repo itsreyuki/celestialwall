@@ -199,6 +199,7 @@ app.use((err, req, res, next) => {
   console.error(err);
   if (err?.type === 'entity.too.large' || err?.status === 413) return res.status(413).json({ error: 'Request payload is too large.' });
   if (err instanceof URIError) return res.status(400).json({ error: 'Malformed request.' });
+  if (err?.expose) return res.status(err.status || 500).json({ error: err.message });
   res.status(500).json({ error: 'حدث خطأ داخلي في الخادم.' });
 });
 

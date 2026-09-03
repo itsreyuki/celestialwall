@@ -442,6 +442,7 @@ router.use((error, req, res, next) => {
   if (error instanceof multer.MulterError) {
     return res.status(400).json({ error: error.code === 'LIMIT_FILE_SIZE' ? 'Pages assets must be 25MB or smaller.' : 'Use supported image, video, or audio files only.' });
   }
+  if (error?.expose) return res.status(error.status || 500).json({ error: error.message });
   return next(error);
 });
 
