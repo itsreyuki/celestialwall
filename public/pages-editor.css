@@ -16,8 +16,8 @@
  .save-status { min-width: 52px; color: #b8eac9; font-size: 10px; font-weight: 700; text-align: center; }
  .save-status.is-saving { color: #f4d584; }
  .save-status.is-error { color: #ffc0cf; }
- .editor-workspace { display: grid; grid-template-columns: minmax(260px, 330px) minmax(0, 1fr); min-height: calc(100vh - 68px); }
- .editor-sidebar { z-index: 2; border-left: 1px solid rgba(255,255,255,.08); padding: 15px; background: rgba(20, 13, 35, .8); }
+ .editor-workspace { display: grid; grid-template-columns: minmax(260px, 330px) minmax(0, 1fr); align-items: start; min-height: calc(100vh - 68px); }
+ .editor-sidebar { position: sticky; z-index: 2; top: 68px; max-height: calc(100vh - 68px); overflow-y: auto; overscroll-behavior: contain; border-left: 1px solid rgba(255,255,255,.08); padding: 15px; background: rgba(20, 13, 35, .8); }
  .editor-panel + .editor-panel { margin-top: 14px; border-top: 1px solid rgba(255,255,255,.08); padding-top: 14px; }
  .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 11px; }
  .panel-heading h2 { margin: 0; color: #f6df99; font-size: 13px; }
@@ -80,7 +80,7 @@
  .editor-stage { padding: 15px; }
  .preview-frame { min-height: calc(100vh - 350px); padding: 13px; }
  .page-preview { width: min(100%, 600px); }
- .editor-sidebar { position: fixed; z-index: 20; right: 0; bottom: 0; left: 0; max-height: 250px; overflow: auto; border: 1px solid rgba(245, 204, 102, .2); border-radius: 20px 20px 0 0; padding: 12px; background: rgba(20, 13, 35, .97); box-shadow: 0 -18px 45px rgba(0,0,0,.42); }
+ .editor-sidebar { position: fixed; z-index: 20; top: auto; right: 0; bottom: 0; left: 0; max-height: 250px; overflow: auto; border: 1px solid rgba(245, 204, 102, .2); border-radius: 20px 20px 0 0; padding: 12px; background: rgba(20, 13, 35, .97); box-shadow: 0 -18px 45px rgba(0,0,0,.42); }
  .mobile-panel-tabs { display: flex; gap: 7px; margin-bottom: 10px; }
  .mobile-panel-tabs button { flex: 1; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; padding: 7px; color: #dcd0e9; background: rgba(255,255,255,.05); font-weight: 700; font-size: 11px; }
  .mobile-panel-tabs button.is-active { color: #291b33; background: #efc35f; }
