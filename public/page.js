@@ -130,30 +130,33 @@ function musicPlayer(config) {
   const player = document.createElement('section'); player.className = `celestia-player preset-${config.preset}`; player.setAttribute('aria-label', 'مشغل الموسيقى');
   const audio = document.createElement('audio'); if (hasAudio) audio.src = config.audioUrl; audio.preload = 'metadata'; audio.loop = config.loop;
   const cover = document.createElement('img'); cover.className = 'player-cover'; cover.src = config.cover?.url || '/assets/logo.png'; cover.alt = '';
-  const details = document.createElement('div'); details.className = 'player-details'; const title = document.createElement('strong'); title.textContent = config.title || 'Untitled'; details.append(title);
+  const details = document.createElement('div'); details.className = 'player-details'; const title = document.createElement('strong'); title.textContent = config.title || 'Untitled';
   const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'player-toggle'; toggle.textContent = '▶'; toggle.disabled = !hasAudio; toggle.setAttribute('aria-label', hasAudio ? 'تشغيل الموسيقى' : 'أضف ملفًا صوتيًا لتشغيل الموسيقى');
   const progress = document.createElement('input'); progress.type = 'range'; progress.className = 'player-progress'; progress.min = '0'; progress.max = '100'; progress.value = '0'; progress.disabled = !hasAudio; progress.setAttribute('aria-label', 'تقدم الأغنية');
   const time = document.createElement('span'); time.className = 'player-time'; time.textContent = '0:00';
+  const timeline = document.createElement('div'); timeline.className = 'player-timeline'; timeline.append(progress, time); details.append(title, timeline);
   const volume = document.createElement('input'); volume.type = 'range'; volume.min = '0'; volume.max = '1'; volume.step = '.05'; volume.value = '1'; volume.className = 'player-volume'; volume.setAttribute('aria-label', 'مستوى الصوت');
   const loop = document.createElement('button'); loop.type = 'button'; loop.className = 'player-loop'; loop.textContent = '↻'; loop.setAttribute('aria-pressed', String(config.loop)); loop.setAttribute('aria-label', 'تكرار');
-  const controls = document.createElement('div'); controls.className = 'player-controls'; controls.append(toggle, progress, time, volume, loop); player.append(cover, details, controls, audio);
+  const controls = document.createElement('div'); controls.className = 'player-controls'; controls.append(toggle, volume, loop); player.append(cover, details, controls, audio);
   const sync = () => { progress.value = String(audio.duration ? (audio.currentTime / audio.duration) * 100 : 0); time.textContent = `${formatTime(audio.currentTime)} / ${formatTime(audio.duration)}`; toggle.textContent = audio.paused ? '▶' : '❚❚'; toggle.setAttribute('aria-label', audio.paused ? 'تشغيل الموسيقى' : 'إيقاف الموسيقى'); };
   toggle.addEventListener('click', async () => { if (!hasAudio) return; if (audio.paused) { if (activeAudio && activeAudio !== audio) activeAudio.pause(); try { await audio.play(); activeAudio = audio; } catch { return; } } else audio.pause(); sync(); });
   audio.addEventListener('timeupdate', sync); audio.addEventListener('loadedmetadata', sync); audio.addEventListener('play', sync); audio.addEventListener('pause', sync); progress.addEventListener('input', () => { if (audio.duration) audio.currentTime = (Number(progress.value) / 100) * audio.duration; }); volume.addEventListener('input', () => { audio.volume = Number(volume.value); }); loop.addEventListener('click', () => { audio.loop = !audio.loop; loop.setAttribute('aria-pressed', String(audio.loop)); }); return player;
 }
 function scaleMusicPlayer(player, element) {
   const scale = elementVisualScale(element);
-  player.style.fontSize = `${Math.round((element.style.fontSize || 14) * scale * 10) / 10}px`;
-  player.style.padding = `${Math.round(Math.max(6, 10 * scale))}px`;
+  const contentScale = Math.max(.72, Math.min(1.8, scale));
+  player.style.fontSize = `${Math.max(11, Math.round((element.style.fontSize || 14) * contentScale * 10) / 10)}px`;
+  player.style.padding = `${Math.max(5, Math.min(10, Math.round(7 * contentScale)))}px`;
   const cover = player.querySelector('.player-cover');
-  const coverSize = Math.round(52 * scale);
-  player.style.gridTemplateColumns = `${coverSize}px minmax(0, 1fr)`;
+  const coverSize = Math.max(34, Math.min(58, Math.round(44 * contentScale)));
+  player.style.gridTemplateColumns = `${coverSize}px minmax(0, 1fr) auto`;
   if (cover) { cover.style.width = `${coverSize}px`; cover.style.height = `${coverSize}px`; }
   const toggle = player.querySelector('.player-toggle'); const loop = player.querySelector('.player-loop');
-  if (toggle) { toggle.style.width = `${Math.round(29 * scale)}px`; toggle.style.height = `${Math.round(29 * scale)}px`; }
-  if (loop) { loop.style.width = `${Math.round(27 * scale)}px`; loop.style.height = `${Math.round(27 * scale)}px`; }
-  const controls = player.querySelector('.player-controls');
-  if (controls) controls.style.gridTemplateColumns = `auto minmax(20px,1fr) auto minmax(20px,${Math.round(70 * scale)}px) auto`;
+  const toggleSize = Math.max(26, Math.min(34, Math.round(29 * contentScale)));
+  const loopSize = Math.max(24, Math.min(31, Math.round(27 * contentScale)));
+  if (toggle) { toggle.style.width = `${toggleSize}px`; toggle.style.height = `${toggleSize}px`; }
+  if (loop) { loop.style.width = `${loopSize}px`; loop.style.height = `${loopSize}px`; }
+  player.style.setProperty('--player-volume-width', `${Math.max(38, Math.min(68, Math.round(54 * contentScale)))}px`);
 }
 function widgetNode(page, element) {
   const data = element.widgetData; const node = document.createElement('section'); node.className = `public-widget widget-${data.kind}`;

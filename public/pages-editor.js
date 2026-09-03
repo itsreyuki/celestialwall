@@ -295,13 +295,15 @@ function applyContentScale(elementNode, element, layout) {
 
   const music = elementNode.querySelector('.editor-music');
   if (music) {
-    music.style.fontSize = `${Math.round((element.style.fontSize || 14) * scale * 10) / 10}px`;
+    const contentScale = Math.max(.72, Math.min(1.8, scale));
+    music.style.fontSize = `${Math.max(10, Math.round((element.style.fontSize || 14) * contentScale * 10) / 10)}px`;
     const cover = music.querySelector('.editor-music-cover');
     const toggle = music.querySelector('.editor-music-toggle');
-    const controlSize = Math.round(30 * scale);
+    const controlSize = Math.max(24, Math.min(34, Math.round(28 * contentScale)));
     if (cover) {
-      cover.style.width = `${Math.round(38 * scale)}px`;
-      cover.style.height = `${Math.round(38 * scale)}px`;
+      const coverSize = Math.max(30, Math.min(54, Math.round(38 * contentScale)));
+      cover.style.width = `${coverSize}px`;
+      cover.style.height = `${coverSize}px`;
     }
     if (toggle) {
       toggle.style.width = `${controlSize}px`;
@@ -584,7 +586,7 @@ function contentNode(element, layout) {
   const progress = document.createElement('i');
   progress.className = 'editor-music-progress';
   details.append(title, progress);
-  node.append(cover, play, details);
+  node.append(cover, details, play);
   return node;
 }
 
