@@ -3,6 +3,8 @@ const editorApp = document.querySelector('#editor-app');
 const workspace = document.querySelector('#editor-workspace');
 const gate = document.querySelector('#editor-gate');
 const preview = document.querySelector('#page-preview');
+const previewScaler = document.querySelector('#preview-scaler');
+const previewFrame = previewScaler.parentElement;
 const layersList = document.querySelector('#layers-list');
 const layerCount = document.querySelector('#layer-count');
 const inspector = document.querySelector('#inspector');
@@ -40,6 +42,18 @@ const UPLOAD_LIMITS = { image: 8 * 1024 * 1024, gif: 4 * 1024 * 1024, video: 25 
 
 function mobilePreviewActive() {
   return preview.dataset.mode === 'mobile';
+}
+
+function fitEditorPreview() {
+  const viewport = responsive.DESIGN_VIEWPORTS[mobilePreviewActive() ? 'mobile' : 'desktop'];
+  const frameStyle = getComputedStyle(previewFrame);
+  const availableWidth = Math.max(1, previewFrame.clientWidth - parseFloat(frameStyle.paddingLeft) - parseFloat(frameStyle.paddingRight));
+  const scale = Math.min(1, availableWidth / viewport.width);
+  preview.style.width = `${viewport.width}px`;
+  preview.style.height = `${viewport.height}px`;
+  preview.style.transform = `scale(${scale})`;
+  previewScaler.style.width = `${viewport.width * scale}px`;
+  previewScaler.style.height = `${viewport.height * scale}px`;
 }
 
 function clone(value) {
@@ -1546,6 +1560,7 @@ function setPreviewMode(mode) {
   previewLabel.textContent = mobile ? 'معاينة الجوال' : 'معاينة سطح المكتب';
   desktopPreviewButton.classList.toggle('is-active', !mobile);
   mobilePreviewButton.classList.toggle('is-active', mobile);
+  fitEditorPreview();
   if (state) renderAll();
 }
 
@@ -1804,6 +1819,7 @@ document.querySelectorAll('[data-panel-tab]').forEach((button) => button.addEven
   document.querySelectorAll('[data-panel-tab]').forEach((item) => item.classList.toggle('is-active', item === button));
 }));
 if ('ResizeObserver' in window) {
+  new ResizeObserver(() => fitEditorPreview()).observe(previewFrame);
   new ResizeObserver(() => {
     if (!state || pointerAction) return;
     state.configuration.elements.forEach((element) => {
@@ -1877,6 +1893,7 @@ async function initializeEditor() {
   publicLink.href = `/${currentPage.slug}`;
   publicLink.textContent = `celes.lol/${currentPage.slug}`;
   workspace.hidden = false;
+  fitEditorPreview();
   if (window.matchMedia('(max-width: 800px)').matches) setPreviewMode('mobile');
   else renderAll();
   if (profileWasAdded) scheduleAutosave();

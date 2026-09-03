@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { resolveElementLayout, elementVisualScale } = require('../public/page-responsive');
+const { DESIGN_VIEWPORTS, resolveElementLayout, elementVisualScale, fitDesignViewport } = require('../public/page-responsive');
 
 test('responsive layout preserves desktop values when no mobile override exists', () => {
   const element = { position: { x: 25, y: 30 }, size: { width: 40, height: 20 }, visible: true };
@@ -26,4 +26,19 @@ test('visual content scale follows both element dimensions', () => {
   assert.equal(elementVisualScale(element, false), 2);
   element.size = { width: 76, height: 16 };
   assert.equal(Math.round(elementVisualScale(element, false) * 1000) / 1000, 1.414);
+});
+
+test('published page keeps the exact editor aspect ratio on wider screens', () => {
+  const fitted = fitDesignViewport(1920, 900, false);
+  assert.deepEqual(DESIGN_VIEWPORTS.desktop, { width: 920, height: 575 });
+  assert.equal(fitted.renderedHeight, 900);
+  assert.equal(fitted.renderedWidth, 1440);
+  assert.equal(fitted.renderedWidth / fitted.renderedHeight, 920 / 575);
+});
+
+test('mobile pages use the same 360 by 640 editor viewport', () => {
+  const fitted = fitDesignViewport(375, 812, true);
+  assert.deepEqual(DESIGN_VIEWPORTS.mobile, { width: 360, height: 640 });
+  assert.equal(Math.round(fitted.renderedWidth), 375);
+  assert.equal(Math.round(fitted.renderedHeight), 667);
 });
