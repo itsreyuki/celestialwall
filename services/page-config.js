@@ -50,6 +50,12 @@ const PAGE_RATE_LIMITS = Object.freeze({
 
 const SAFE_FONTS = ['Cairo', 'Space Grotesk', 'Arial', 'Georgia', 'Times New Roman', 'Verdana'];
 const PAGE_VISIBILITIES = ['public', 'unlisted', 'private'];
+const SOCIAL_ICON_IDS = [
+  'website', 'link', 'discord', 'instagram', 'x', 'youtube', 'twitch', 'spotify',
+  'github', 'tiktok', 'facebook', 'snapchat', 'telegram', 'whatsapp', 'linkedin',
+  'steam', 'soundcloud', 'reddit', 'pinterest', 'tumblr', 'kick', 'threads',
+  'bluesky', 'mastodon', 'behance', 'dribbble', 'medium', 'devto', 'email', 'phone'
+];
 const RESERVED_SLUGS = new Set([
   'admin', 'api', 'assets', 'auth', 'dashboard', 'editor', 'explore', 'health',
   'login', 'logout', 'me', 'music', 'pages', 'settings', 'signup', 'uploads',
@@ -66,6 +72,15 @@ const urlSchema = z.string().trim().max(2048).refine((value) => {
     return false;
   }
 }, 'Use an HTTPS or server-issued Pages asset URL.');
+const socialUrlSchema = z.string().trim().max(2048).refine((value) => {
+  if (/^mailto:[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(value)) return true;
+  if (/^tel:\+?[0-9()\s-]{3,32}$/.test(value)) return true;
+  try {
+    return new URL(value).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}, 'Use an HTTPS link, mailto email address, or telephone link.');
 const colorSchema = z.string().trim().regex(/^(#[0-9a-fA-F]{3,8}|rgba?\([^)]{1,80}\)|transparent)$/);
 const percentageSchema = z.number().finite().min(0).max(100);
 const opacitySchema = z.number().finite().min(0).max(1);
@@ -183,8 +198,9 @@ const assetSchema = z.object({
 const socialLinkSchema = z.object({
   id: idSchema,
   label: z.string().trim().min(1).max(80),
-  url: urlSchema,
-  icon: z.enum(['website', 'discord', 'instagram', 'x', 'youtube', 'twitch', 'spotify', 'github', 'tiktok']).optional(),
+  url: socialUrlSchema,
+  icon: z.enum(SOCIAL_ICON_IDS).default('website'),
+  display: z.enum(['text', 'icon', 'both']).default('both'),
   visible: z.boolean().default(true)
 }).strict();
 
@@ -383,6 +399,7 @@ module.exports = {
   PAGE_ASSET_TYPES,
   PAGE_RATE_LIMITS,
   PAGE_VISIBILITIES,
+  SOCIAL_ICON_IDS,
   RESERVED_SLUGS,
   pageConfigurationSchema,
   pageInputSchema,

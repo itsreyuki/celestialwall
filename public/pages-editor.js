@@ -15,6 +15,7 @@ const publicLink = document.querySelector('#editor-public-link');
 const previewLabel = document.querySelector('#preview-label');
 const desktopPreviewButton = document.querySelector('#preview-desktop');
 const mobilePreviewButton = document.querySelector('#preview-mobile');
+const socialIcons = window.CelestiaSocialIcons;
 
 let currentPage = null;
 let state = null;
@@ -225,6 +226,11 @@ function widgetPreview(element) {
   const data = element.widgetData;
   const node = document.createElement('div');
   node.className = `editor-widget widget-${data.kind}`;
+  const layout = responsive.resolveElementLayout(element, mobilePreviewActive());
+  const baseHeight = data.kind === 'gallery' ? 30 : 16;
+  const scale = Math.max(.65, Math.min(2.2, Math.sqrt((layout.size.width / 38) * (layout.size.height / baseHeight))));
+  node.style.fontSize = `${Math.round(11 * scale)}px`;
+  node.style.padding = `${Math.round(Math.max(7, Math.min(18, 9 * scale)))}px`;
   if (data.kind === 'quote') node.textContent = `“${data.text}”${data.author ? ` — ${data.author}` : ''}`;
   else if (data.kind === 'mood') node.textContent = `${data.icon || '✨'} ${data.text}`;
   else if (data.kind === 'characters' || data.kind === 'games') node.textContent = data.items.map((item) => item.name).join(' · ');
@@ -259,7 +265,12 @@ function contentNode(element) {
     links.filter((link) => link.visible !== false).forEach((link) => {
       const item = document.createElement('span');
       item.className = 'editor-social-link';
-      item.textContent = link.label;
+      item.style.display = 'inline-flex';
+      item.style.alignItems = 'center';
+      item.style.gap = '.38em';
+      const display = link.display || 'both';
+      if (display !== 'text') item.append(socialIcons?.create(link.icon || 'website', link.label) || document.createTextNode('◉'));
+      if (display !== 'icon') item.append(document.createTextNode(link.label));
       node.append(item);
     });
     return node;
@@ -407,6 +418,16 @@ function widgetInspectorFields(element) {
   return field('النص', 'widgetData.text', data.text);
 }
 
+function socialLinksInspectorFields() {
+  const iconOptions = socialIcons?.options || [['website', 'Website'], ['link', 'Link']];
+  const links = state.configuration.socialLinks;
+  const fields = links.map((link, index) => {
+    const remove = `<button type="button" data-social-action="remove" data-social-index="${index}" ${links.length === 1 ? 'disabled' : ''}>Remove link</button>`;
+    return `<fieldset class="social-link-fields"><legend>Link ${index + 1}</legend>${field('Label', `socialLinks.${index}.label`, link.label)}${field('URL', `socialLinks.${index}.url`, link.url, 'url')}${selectField('Icon', `socialLinks.${index}.icon`, link.icon || 'website', iconOptions, 'data-field')}${selectField('Display', `socialLinks.${index}.display`, link.display || 'both', [['both', 'Text and icon'], ['text', 'Text only'], ['icon', 'Icon only']], 'data-field')}<label class="switch-field">Visible<input data-field="socialLinks.${index}.visible" type="checkbox" ${link.visible !== false ? 'checked' : ''} /></label>${remove}</fieldset>`;
+  }).join('');
+  return `${fields}<button type="button" data-social-action="add" ${links.length >= 12 ? 'disabled' : ''}>+ Add link</button>`;
+}
+
 function renderMobileInspector() {
   const element = selected();
   if (!element) {
@@ -448,8 +469,7 @@ function renderInspector() {
   } else if (element.type === 'image') {
     content = `${field('رابط الصورة HTTPS', 'assetUrl', element.assetUrl || '', 'url')}${field('استدارة الحواف', 'style.borderRadius', element.style.borderRadius || 12, 'number', 'min="0" max="100"')}`;
   } else if (element.type === 'social-links') {
-    const link = state.configuration.socialLinks[0] || { label: 'رابط جديد', url: 'https://example.com' };
-    content = `${field('اسم الرابط', 'social.label', link.label)}${field('رابط HTTPS', 'social.url', link.url, 'url')}`;
+    content = socialLinksInspectorFields();
   } else if (element.type === 'widget') {
     content = widgetInspectorFields(element);
   }
@@ -552,8 +572,17 @@ function commitChange() {
   scheduleAutosave();
 }
 
+function openSettingsPanel() {
+  if (!window.matchMedia('(max-width: 800px)').matches) return;
+  editorApp.dataset.panel = 'settings';
+  document.querySelectorAll('[data-panel-tab]').forEach((button) => {
+    button.classList.toggle('is-active', button.dataset.panelTab === 'settings');
+  });
+}
+
 function selectElement(id) {
   state.selectedId = id;
+  openSettingsPanel();
   renderAll();
 }
 
@@ -561,7 +590,7 @@ function addElement(type) {
   if (state.configuration.elements.length >= 30) return;
   const tabId = state.configuration.tabs[0]?.id;
   if (type === 'social-links') {
-    if (!state.configuration.socialLinks.length) state.configuration.socialLinks.push({ id: EditorState.createId('link'), label: 'رابط جديد', url: 'https://example.com', visible: true });
+    if (!state.configuration.socialLinks.length) state.configuration.socialLinks.push({ id: EditorState.createId('link'), label: 'رابط جديد', url: 'https://example.com', icon: 'website', display: 'both', visible: true });
     EditorState.addElement(state, { type, size: { width: 48, height: 10 }, tabId });
   } else if (type === 'text') {
     EditorState.addElement(state, { type, content: 'اكتب هنا...', size: { width: 38, height: 12 }, style: { color: '#fff7dc', fontSize: 20 }, tabId });
@@ -572,6 +601,7 @@ function addElement(type) {
   } else if (type === 'music') {
     EditorState.addElement(state, { type, content: 'مشغل موسيقى', size: { width: 35, height: 11 }, tabId });
   }
+  openSettingsPanel();
   renderAll();
   scheduleAutosave();
 }
@@ -586,6 +616,7 @@ function addSticker(name) {
     style: { borderRadius: 0, shadow: 'none', glow: false, animation: 'none' },
     tabId: state.configuration.tabs[0]?.id
   });
+  openSettingsPanel();
   renderAll();
   scheduleAutosave();
 }
@@ -593,6 +624,7 @@ function addSticker(name) {
 function addWidget(kind) {
   if (state.configuration.elements.length >= 30 || state.configuration.elements.filter((item) => item.type === 'widget').length >= 6) return;
   EditorState.addElement(state, { type: 'widget', widget: kind, widgetData: widgetDefault(kind), name: `Widget: ${kind}`, size: { width: 38, height: kind === 'gallery' ? 30 : 16 }, tabId: state.configuration.tabs[0]?.id });
+  openSettingsPanel();
   renderAll();
   scheduleAutosave();
 }
@@ -640,10 +672,8 @@ function applyInspectorChange(input) {
     if (key.includes('.asset.') && !state.configuration[key.split('.')[0]].asset) return;
     setNested(state.configuration, key, value);
   }
-  else if (key.startsWith('social.')) {
-    if (!state.configuration.socialLinks.length) state.configuration.socialLinks.push({ id: EditorState.createId('link'), label: 'رابط جديد', url: 'https://example.com', visible: true });
-    state.configuration.socialLinks[0][key.split('.')[1]] = value;
-  } else {
+  else if (key.startsWith('socialLinks.')) setNested(state.configuration, key, value);
+  else {
     if (key.startsWith('mobileOverrides.mobilePosition.')) {
       element.mobileOverrides ||= {};
       element.mobileOverrides.mobilePosition ||= clone(element.position);
@@ -915,6 +945,16 @@ designControls.addEventListener('click', (event) => {
   if (remove) removeTab(remove.dataset.tabRemove);
 });
 inspector.addEventListener('click', (event) => {
+  const socialAction = event.target.closest('[data-social-action]');
+  if (socialAction) {
+    if (socialAction.dataset.socialAction === 'add' && state.configuration.socialLinks.length < 12) {
+      state.configuration.socialLinks.push({ id: EditorState.createId('link'), label: 'رابط جديد', url: 'https://example.com', icon: 'website', display: 'both', visible: true });
+    } else if (socialAction.dataset.socialAction === 'remove') {
+      state.configuration.socialLinks.splice(Number(socialAction.dataset.socialIndex), 1);
+    }
+    commitChange();
+    return;
+  }
   const mobileToggle = event.target.closest('[data-mobile-override-toggle]');
   if (mobileToggle) {
     const element = selected();

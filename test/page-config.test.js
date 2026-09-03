@@ -121,3 +121,15 @@ test('page input protects reserved and malformed slugs', () => {
   assert.equal(pageInputSchema.safeParse({ ...base, slug: 'Not Valid' }).success, false);
   assert.equal(pageInputSchema.safeParse({ ...base, slug: 'celestia-user' }).success, true);
 });
+
+test('social links validate display choices and safe link protocols', () => {
+  const configuration = createDefaultPageConfiguration();
+  configuration.socialLinks = [
+    { id: 'discord-link', label: 'Discord', url: 'https://discord.gg/celes', icon: 'discord', display: 'icon', visible: true },
+    { id: 'email-link', label: 'Email', url: 'mailto:hello@example.com', icon: 'email', display: 'both', visible: true },
+    { id: 'phone-link', label: 'Phone', url: 'tel:+1234567890', icon: 'phone', display: 'text', visible: true }
+  ];
+  assert.equal(validatePageConfiguration(configuration).success, true);
+  configuration.socialLinks[0].url = 'javascript:alert(1)';
+  assert.equal(validatePageConfiguration(configuration).success, false);
+});

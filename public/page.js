@@ -21,6 +21,18 @@ function geometry(node, element) {
   node.style.boxShadow = element.style.shadow === 'strong' ? '0 14px 28px rgba(0,0,0,.5)' : (element.style.shadow === 'soft' ? '0 8px 18px rgba(0,0,0,.3)' : 'none');
   if (element.style.glow) node.style.boxShadow += ', 0 0 20px rgba(241,199,94,.45)';
 }
+function scaleWidget(node, element) {
+  const layout = window.CelestiaPageResponsive.resolveElementLayout(element, mobileViewport());
+  const baseHeight = element.widgetData?.kind === 'gallery' ? 30 : 16;
+  const scale = Math.max(.65, Math.min(2.2, Math.sqrt((layout.size.width / 38) * (layout.size.height / baseHeight))));
+  const mediaSize = Math.round(70 * scale);
+  node.style.fontSize = `${Math.round(16 * scale)}px`;
+  node.style.padding = `${Math.round(Math.max(8, Math.min(24, 12 * scale)))}px`;
+  node.querySelectorAll('.widget-favorites figure').forEach((figure) => { figure.style.minWidth = `${mediaSize}px`; });
+  node.querySelectorAll('.widget-favorites img').forEach((image) => { image.style.width = `${mediaSize}px`; image.style.height = `${mediaSize}px`; });
+  node.querySelectorAll('.widget-gallery.layout-polaroid figure').forEach((figure) => { figure.style.flexBasis = `${Math.round(115 * scale)}px`; });
+  node.querySelectorAll('.widget-gallery img').forEach((image) => { image.style.minHeight = `${Math.round(70 * scale)}px`; image.style.maxHeight = `${Math.round(160 * scale)}px`; });
+}
 function mediaElement(asset, video = false, lazy = false, mobile = false) {
   const media = video ? document.createElement('video') : document.createElement('img');
   media.src = asset.url; media.style.objectFit = asset.fit || 'cover'; media.style.objectPosition = assetPosition(asset);
@@ -51,7 +63,7 @@ function textElement(element) {
   const node = document.createElement('div'); node.className = 'public-text'; node.textContent = element.content || ''; node.style.fontFamily = element.style.fontFamily || 'Cairo'; node.style.fontSize = `${element.style.fontSize || 18}px`; node.style.fontWeight = element.style.fontWeight || '400'; node.style.textAlign = element.style.textAlign || 'right'; node.style.letterSpacing = `${element.style.letterSpacing || 0}px`; node.style.lineHeight = String(element.style.lineHeight || 1.4); if (element.style.effect && element.style.effect !== 'none') node.classList.add(`effect-${element.style.effect}`); return node;
 }
 function socialLinks(configuration) {
-  const node = document.createElement('nav'); node.className = 'public-links'; configuration.socialLinks.filter((link) => link.visible !== false).forEach((link) => { const anchor = document.createElement('a'); anchor.href = link.url; anchor.target = '_blank'; anchor.rel = 'noopener noreferrer'; anchor.textContent = link.label; node.append(anchor); }); return node;
+  const node = document.createElement('nav'); node.className = 'public-links'; configuration.socialLinks.filter((link) => link.visible !== false).forEach((link) => { const anchor = document.createElement('a'); const display = link.display || 'both'; anchor.href = link.url; anchor.target = '_blank'; anchor.rel = 'noopener noreferrer'; anchor.style.display = 'inline-flex'; anchor.style.alignItems = 'center'; anchor.style.justifyContent = 'center'; anchor.style.gap = '.45em'; if (display !== 'text') anchor.append(window.CelestiaSocialIcons?.create(link.icon || 'website', link.label) || text('◉')); if (display !== 'icon') anchor.append(text(link.label)); node.append(anchor); }); return node;
 }
 async function publicRequest(url, options = {}) {
   const response = await fetch(url, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }, ...options });
@@ -120,7 +132,7 @@ function widgetNode(page, element) {
 }
 function renderElement(page, configuration, element) {
   const node = document.createElement('div'); node.className = `public-element public-${element.type}`; if (element.type === 'image' && element.style.animation && element.style.animation !== 'none') node.classList.add(`image-animation-${element.style.animation}`); geometry(node, element);
-  if (element.type === 'profile-card') node.append(profileCard(page, configuration)); else if (element.type === 'text') node.append(textElement(element)); else if (element.type === 'social-links') node.append(socialLinks(configuration)); else if (element.type === 'image') { const image = mediaElement({ url: element.assetUrl, fit: 'cover' }, false, element.position.y > 62); image.alt = element.name || ''; node.append(image); } else if (element.type === 'widget') { const widget = element.widgetData.kind === 'guestbook' ? guestbookWidget(page, element) : widgetNode(page, element); if (widget) node.append(widget); else node.hidden = true; } else if (element.type === 'music') node.append(musicPlayer(configuration.musicPlayer) || text('Music Player')); else node.append(text(element.content || '✨')); return node;
+  if (element.type === 'profile-card') node.append(profileCard(page, configuration)); else if (element.type === 'text') node.append(textElement(element)); else if (element.type === 'social-links') node.append(socialLinks(configuration)); else if (element.type === 'image') { const image = mediaElement({ url: element.assetUrl, fit: 'cover' }, false, element.position.y > 62); image.alt = element.name || ''; node.append(image); } else if (element.type === 'widget') { const widget = element.widgetData.kind === 'guestbook' ? guestbookWidget(page, element) : widgetNode(page, element); if (widget) { scaleWidget(widget, element); node.append(widget); } else node.hidden = true; } else if (element.type === 'music') node.append(musicPlayer(configuration.musicPlayer) || text('Music Player')); else node.append(text(element.content || '✨')); return node;
 }
 function entranceScreen(configuration, onEnter) {
   const config = configuration.entranceScreen; if (!config.enabled) return null;
