@@ -99,7 +99,7 @@ app.use('/vendor/fabric', express.static(path.join(__dirname, 'node_modules', 'f
 app.use('/vendor/socket.io', express.static(path.join(__dirname, 'node_modules', 'socket.io-client', 'dist')));
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders: (res, filePath) => {
-    if (/\.(?:js|css)$/.test(filePath)) res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+    if (/\.(?:js|css)$/.test(filePath)) res.setHeader('Cache-Control', 'no-cache');
   }
 }));
 

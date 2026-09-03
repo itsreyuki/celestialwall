@@ -7,12 +7,16 @@ const layersList = document.querySelector('#layers-list');
 const layerCount = document.querySelector('#layer-count');
 const inspector = document.querySelector('#inspector');
 const designControls = document.querySelector('#design-controls');
+const editorSidebar = document.querySelector('.editor-sidebar');
 const saveStatus = document.querySelector('#save-status');
 const undoButton = document.querySelector('#editor-undo');
 const redoButton = document.querySelector('#editor-redo');
+const saveButton = document.querySelector('#editor-save');
+const publishButton = document.querySelector('#editor-publish');
 const deleteButton = document.querySelector('#delete-element');
 const publicLink = document.querySelector('#editor-public-link');
 const previewLabel = document.querySelector('#preview-label');
+const publishStatus = document.querySelector('#page-publish-status');
 const desktopPreviewButton = document.querySelector('#preview-desktop');
 const mobilePreviewButton = document.querySelector('#preview-mobile');
 const socialIcons = window.CelestiaSocialIcons;
@@ -22,8 +26,15 @@ let state = null;
 let autosaveTimer = null;
 let saving = false;
 let saveAgain = false;
+let saveWaiters = [];
 let pointerAction = null;
+let activeTabId = null;
+let entrancePreviewVisible = true;
+let inspectorMode = 'content';
 const responsive = window.CelestiaPageResponsive;
+const ELEMENT_LIMIT = 30;
+const RESIZE_HANDLES = ['nw', 'ne', 'sw', 'se'];
+const UPLOAD_LIMITS = { image: 8 * 1024 * 1024, gif: 4 * 1024 * 1024, video: 25 * 1024 * 1024, audio: 15 * 1024 * 1024 };
 
 function mobilePreviewActive() {
   return preview.dataset.mode === 'mobile';
@@ -44,7 +55,10 @@ function request(url, options = {}) {
     ...options
   }).then(async (response) => {
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.error || 'تعذر حفظ التغييرات.');
+    if (!response.ok) {
+      const details = Array.isArray(body.issues) ? body.issues[0]?.message : '';
+      throw new Error([body.error || 'تعذر حفظ التغييرات.', details].filter(Boolean).join(' '));
+    }
     return body;
   });
 }
@@ -90,12 +104,14 @@ function applyGeometry(elementNode, element, layout = responsive.resolveElementL
   elementNode.style.width = `${layout.size.width}%`;
   elementNode.style.height = `${layout.size.height}%`;
   elementNode.style.zIndex = String(element.zIndex);
-  elementNode.style.transform = `translate(-50%, -50%) rotate(${element.style.rotation || 0}deg) scale(${layout.scale}) scaleX(${element.style.flipX ? -1 : 1})`;
+  elementNode.style.transform = `translate(-50%, -50%) scale(${layout.scale})`;
   elementNode.style.textAlign = layout.alignment || '';
   elementNode.style.color = element.style.color || '';
   elementNode.style.backgroundColor = element.type === 'profile-card' ? '' : (element.style.backgroundColor || '');
   elementNode.style.opacity = element.style.opacity ?? '';
   elementNode.style.borderRadius = element.style.borderRadius !== undefined ? `${element.style.borderRadius}px` : '';
+  const previewRect = preview.getBoundingClientRect();
+  if (previewRect.width && previewRect.height) elementNode.dataset.dimensions = `${Math.round(previewRect.width * layout.size.width * layout.scale / 100)} × ${Math.round(previewRect.height * layout.size.height * layout.scale / 100)} px`;
   elementNode.style.boxShadow = element.style.shadow === 'strong'
     ? '0 14px 28px rgba(0,0,0,.5)'
     : (element.style.shadow === 'soft' ? '0 8px 18px rgba(0,0,0,.3)' : 'none');
@@ -148,21 +164,110 @@ function renderBackground() {
   preview.append(overlay, vignette, grain);
 }
 
+function renderEntrancePreview() {
+  const config = state.configuration.entranceScreen;
+  if (!config.enabled || !entrancePreviewVisible) return;
+  const screen = document.createElement('div');
+  screen.className = `editor-entrance-preview transition-${config.transition}`;
+  screen.style.backgroundColor = config.backgroundColor;
+  if (config.background?.url) {
+    const image = document.createElement('img');
+    image.src = config.background.url;
+    image.alt = '';
+    image.style.objectFit = config.background.fit || 'cover';
+    image.style.objectPosition = assetPosition(config.background);
+    screen.append(image);
+  }
+  const message = document.createElement('span');
+  message.textContent = config.text || 'اضغط للدخول';
+  applyTextStyle(message, config.textStyle);
+  const dismiss = document.createElement('button');
+  dismiss.type = 'button';
+  dismiss.dataset.dismissEntrancePreview = '';
+  dismiss.textContent = 'متابعة التحرير';
+  screen.append(message, dismiss);
+  preview.append(screen);
+}
+
 function elementScale(element, layout) {
-  const baseSizes = {
-    'profile-card': [72, 48], text: [38, 12], 'social-links': [48, 10],
-    image: [24, 24], sticker: [14, 16], music: [35, 11]
-  };
-  const [baseWidth, baseHeight] = baseSizes[element.type] || [38, element.widgetData?.kind === 'gallery' ? 30 : 16];
-  return Math.max(.55, Math.min(2.4, Math.sqrt((layout.size.width / baseWidth) * (layout.size.height / baseHeight))));
+  return responsive.elementVisualScale(element, mobilePreviewActive(), layout);
+}
+
+function elementFontSize(element, mobile = mobilePreviewActive()) {
+  if (mobile && element.mobileOverrides?.fontSize !== undefined) return element.mobileOverrides.fontSize;
+  return element.style.fontSize || (element.type === 'sticker' ? 42 : 18);
+}
+
+function applyTextStyle(node, style, scale = 1) {
+  node.style.fontFamily = style.fontFamily || 'Cairo';
+  node.style.fontSize = `${Math.round((style.fontSize || 16) * scale * 10) / 10}px`;
+  node.style.fontWeight = style.fontWeight || '400';
+  node.style.color = style.color || '';
+  node.style.textAlign = style.textAlign || '';
+  node.style.letterSpacing = `${style.letterSpacing || 0}px`;
+  node.style.lineHeight = String(style.lineHeight || 1.4);
+  [...node.classList].filter((name) => name.startsWith('effect-')).forEach((name) => node.classList.remove(name));
+  if (style.effect && style.effect !== 'none') node.classList.add(`effect-${style.effect}`);
+}
+
+function applyContentScale(elementNode, element, layout) {
+  const scale = elementScale(element, layout);
+  const profile = elementNode.querySelector('.editor-profile-card');
+  if (profile) {
+    const config = state.configuration.profileCard;
+    const avatar = profile.querySelector('.editor-profile-avatar');
+    profile.style.padding = `${Math.round(config.padding * scale)}px`;
+    if (avatar) {
+      avatar.style.width = `${Math.round(state.configuration.avatar.size * scale)}px`;
+      avatar.style.height = `${Math.round(state.configuration.avatar.size * scale)}px`;
+    }
+    const name = profile.querySelector('h3');
+    const bio = profile.querySelector('p');
+    if (name) applyTextStyle(name, state.configuration.typography.displayName, scale);
+    if (bio) applyTextStyle(bio, state.configuration.typography.bio, scale);
+  }
+
+  const textNode = elementNode.querySelector('.editor-text');
+  if (textNode) textNode.style.fontSize = `${elementFontSize(element)}px`;
+
+  const socialNode = elementNode.querySelector('.editor-social-links');
+  if (socialNode) applyTextStyle(socialNode, state.configuration.typography.link, scale);
+
+  const sticker = elementNode.querySelector('.editor-sticker');
+  if (sticker) sticker.style.fontSize = `${elementFontSize(element)}px`;
+
+  const widget = elementNode.querySelector('.editor-widget');
+  if (widget) {
+    widget.style.fontSize = `${Math.round((element.style.fontSize || 11) * scale * 10) / 10}px`;
+    widget.style.padding = `${Math.round(Math.max(2, Math.min(36, 9 * scale)))}px`;
+    const mediaSize = Math.max(10, Math.round(48 * scale));
+    widget.querySelectorAll('.editor-widget-favorites figure').forEach((figure) => { figure.style.minWidth = `${mediaSize}px`; });
+    widget.querySelectorAll('.editor-widget-favorites img').forEach((image) => { image.style.width = `${mediaSize}px`; image.style.height = `${mediaSize}px`; });
+    widget.querySelectorAll('.editor-widget-gallery img').forEach((image) => { image.style.minHeight = `${Math.max(8, Math.round(42 * scale))}px`; image.style.maxHeight = `${Math.max(18, Math.round(110 * scale))}px`; });
+  }
+
+  const music = elementNode.querySelector('.editor-music');
+  if (music) {
+    music.style.fontSize = `${Math.round((element.style.fontSize || 14) * scale * 10) / 10}px`;
+    const cover = music.querySelector('.editor-music-cover');
+    const toggle = music.querySelector('.editor-music-toggle');
+    const controlSize = Math.round(30 * scale);
+    if (cover) {
+      cover.style.width = `${Math.round(38 * scale)}px`;
+      cover.style.height = `${Math.round(38 * scale)}px`;
+    }
+    if (toggle) {
+      toggle.style.width = `${controlSize}px`;
+      toggle.style.height = `${controlSize}px`;
+    }
+  }
 }
 
 function profileCardNode(element, scale = 1) {
   const config = state.configuration.profileCard;
   const card = document.createElement('article');
   card.className = 'editor-profile-card';
-  card.style.background = config.backgroundColor;
-  card.style.opacity = String(config.opacity);
+  card.style.background = `color-mix(in srgb, ${config.backgroundColor} ${Math.round(config.opacity * 100)}%, transparent)`;
   card.style.borderColor = config.borderColor;
   card.style.borderWidth = `${config.borderWidth}px`;
   card.style.borderRadius = `${config.borderRadius}px`;
@@ -212,11 +317,11 @@ function profileCardNode(element, scale = 1) {
   avatar.style.boxShadow = avatarConfig.shadow === 'strong' ? '0 12px 24px rgba(0,0,0,.5)' : (avatarConfig.shadow === 'soft' ? '0 7px 16px rgba(0,0,0,.32)' : 'none');
   if (avatarConfig.glow) avatar.style.boxShadow += ', 0 0 18px rgba(241,199,94,.42)';
   const name = document.createElement('h3');
-  name.style.fontSize = `${Math.round(16 * scale)}px`;
   name.textContent = currentPage.displayName || 'اسمك';
   const bio = document.createElement('p');
-  bio.style.fontSize = `${Math.round(10 * scale)}px`;
   bio.textContent = currentPage.bio || 'أضف نبذة من صفحة الإدارة.';
+  applyTextStyle(name, state.configuration.typography.displayName, scale);
+  applyTextStyle(bio, state.configuration.typography.bio, scale);
   card.append(avatar, name, bio);
   return card;
 }
@@ -232,7 +337,7 @@ function widgetDefault(kind) {
   if (kind === 'clock') return { kind, format: '24h', showSeconds: false };
   if (kind === 'countdown') return { kind, title: 'الحدث القادم', targetDate: new Date(Date.now() + 86400000).toISOString(), finishedText: 'انتهى الحدث' };
   if (kind === 'poll') return { kind, question: 'ما رأيك؟', options: [{ id: id(), label: 'خيار أول' }, { id: id(), label: 'خيار ثانٍ' }] };
-  return { kind: 'guestbook', text: 'سجل الزوار سيتوفر قريبًا.' };
+  return { kind: 'guestbook', text: 'اترك رسالة في سجل الزوار.' };
 }
 
 function widgetPreview(element) {
@@ -240,19 +345,91 @@ function widgetPreview(element) {
   const node = document.createElement('div');
   node.className = `editor-widget widget-${data.kind}`;
   const layout = responsive.resolveElementLayout(element, mobilePreviewActive());
-  const baseHeight = data.kind === 'gallery' ? 30 : 16;
-  const scale = Math.max(.65, Math.min(2.2, Math.sqrt((layout.size.width / 38) * (layout.size.height / baseHeight))));
-  node.style.fontSize = `${Math.round(11 * scale)}px`;
-  node.style.padding = `${Math.round(Math.max(7, Math.min(18, 9 * scale)))}px`;
-  if (data.kind === 'quote') node.textContent = `“${data.text}”${data.author ? ` — ${data.author}` : ''}`;
-  else if (data.kind === 'mood') node.textContent = `${data.icon || '✨'} ${data.text}`;
-  else if (data.kind === 'characters' || data.kind === 'games') node.textContent = data.items.map((item) => item.name).join(' · ');
-  else if (data.kind === 'gallery') node.textContent = `Gallery · ${data.items.length} صور`;
-  else if (data.kind === 'clock') node.textContent = new Intl.DateTimeFormat('ar', { hour: '2-digit', minute: '2-digit', second: data.showSeconds ? '2-digit' : undefined, hour12: data.format === '12h' }).format(new Date());
-  else if (data.kind === 'countdown') node.textContent = data.title;
-  else if (data.kind === 'poll') node.textContent = data.question;
-  else if (data.kind === 'counter') node.textContent = `${data.label}: 0`;
-  else node.textContent = data.text;
+  const scale = elementScale(element, layout);
+  node.style.fontSize = `${Math.round((element.style.fontSize || 11) * scale * 10) / 10}px`;
+  node.style.padding = `${Math.round(Math.max(2, Math.min(36, 9 * scale)))}px`;
+  node.style.color = element.style.color || '';
+  node.style.background = element.style.backgroundColor || '';
+  node.style.borderRadius = `${element.style.borderRadius ?? 12}px`;
+  if (data.kind === 'quote') {
+    const quote = document.createElement('blockquote');
+    quote.textContent = `“${data.text}”`;
+    node.append(quote);
+    if (data.author) {
+      const author = document.createElement('cite');
+      author.textContent = `— ${data.author}`;
+      node.append(author);
+    }
+  } else if (data.kind === 'mood') {
+    const icon = document.createElement('b');
+    icon.textContent = data.icon || '✨';
+    const mood = document.createElement('span');
+    mood.textContent = data.text;
+    node.append(icon, mood);
+  } else if (data.kind === 'characters' || data.kind === 'games') {
+    const list = document.createElement('div');
+    list.className = 'editor-widget-favorites';
+    data.items.forEach((item) => {
+      const card = document.createElement('figure');
+      const image = document.createElement('img');
+      image.src = item.image.url;
+      image.alt = '';
+      image.style.objectFit = item.image.fit || 'cover';
+      image.style.objectPosition = assetPosition(item.image);
+      const label = document.createElement('figcaption');
+      label.textContent = item.name;
+      card.append(image, label);
+      list.append(card);
+    });
+    node.append(list);
+  } else if (data.kind === 'gallery') {
+    const gallery = document.createElement('div');
+    gallery.className = `editor-widget-gallery layout-${data.layout}`;
+    data.items.forEach((item) => {
+      const figure = document.createElement('figure');
+      const image = document.createElement('img');
+      image.src = item.image.url;
+      image.alt = '';
+      image.style.objectFit = item.image.fit || 'cover';
+      image.style.objectPosition = assetPosition(item.image);
+      figure.append(image);
+      if (item.caption) {
+        const caption = document.createElement('figcaption');
+        caption.textContent = item.caption;
+        figure.append(caption);
+      }
+      gallery.append(figure);
+    });
+    node.append(gallery);
+  } else if (data.kind === 'clock') {
+    node.textContent = new Intl.DateTimeFormat('ar', { hour: '2-digit', minute: '2-digit', second: data.showSeconds ? '2-digit' : undefined, hour12: data.format === '12h' }).format(new Date());
+  } else if (data.kind === 'countdown') {
+    const difference = Math.max(0, new Date(data.targetDate).getTime() - Date.now());
+    const total = Math.floor(difference / 1000);
+    const title = document.createElement('strong');
+    title.textContent = difference ? data.title : (data.finishedText || 'انتهى');
+    const value = document.createElement('span');
+    value.textContent = difference ? `${Math.floor(total / 86400)}d ${Math.floor(total % 86400 / 3600)}h ${Math.floor(total % 3600 / 60)}m` : '';
+    node.append(title, value);
+  } else if (data.kind === 'poll') {
+    const question = document.createElement('strong');
+    question.textContent = data.question;
+    node.append(question);
+    data.options.forEach((option) => {
+      const button = document.createElement('span');
+      button.className = 'editor-poll-option';
+      button.textContent = option.label;
+      node.append(button);
+    });
+  } else if (data.kind === 'counter') {
+    node.textContent = `${data.label}: ${currentPage.viewsCount || 0}`;
+  } else {
+    const title = document.createElement('strong');
+    title.textContent = 'Guestbook';
+    const message = document.createElement('span');
+    message.textContent = data.text;
+    node.append(title, message);
+  }
   return node;
 }
 
@@ -263,7 +440,7 @@ function contentNode(element, layout) {
     const node = document.createElement('div');
     node.className = 'editor-text';
     node.textContent = element.content || 'نص جديد';
-    node.style.fontSize = `${Math.round((element.style.fontSize || 18) * scale)}px`;
+    node.style.fontSize = `${elementFontSize(element)}px`;
     node.style.fontFamily = element.style.fontFamily || 'Cairo';
     node.style.fontWeight = element.style.fontWeight || '400';
     node.style.textAlign = element.style.textAlign || 'right';
@@ -275,7 +452,7 @@ function contentNode(element, layout) {
   if (element.type === 'social-links') {
     const node = document.createElement('div');
     node.className = 'editor-social-links';
-    node.style.fontSize = `${Math.round(11 * scale)}px`;
+    applyTextStyle(node, state.configuration.typography.link, scale);
     const links = state.configuration.socialLinks.length ? state.configuration.socialLinks : [{ label: 'رابطك' }];
     links.filter((link) => link.visible !== false).forEach((link) => {
       const item = document.createElement('span');
@@ -293,10 +470,13 @@ function contentNode(element, layout) {
   if (element.type === 'image') {
     const node = document.createElement('div');
     node.className = 'editor-image';
+    node.style.borderRadius = `${element.style.borderRadius ?? 12}px`;
     if (element.assetUrl) {
       const image = document.createElement('img');
       image.src = element.assetUrl;
       image.alt = '';
+      image.style.objectFit = element.style.objectFit || 'cover';
+      image.style.objectPosition = element.style.objectPosition || 'center';
       node.append(image);
     } else {
       const placeholder = document.createElement('span');
@@ -310,26 +490,51 @@ function contentNode(element, layout) {
     const node = document.createElement('div');
     node.className = 'editor-sticker';
     node.textContent = element.content || '✨';
-    node.style.fontSize = `${Math.round(42 * scale)}px`;
+    node.style.fontSize = `${elementFontSize(element)}px`;
     return node;
   }
   if (element.type === 'widget') return widgetPreview(element);
-  const node = document.createElement('div');
+  const node = document.createElement('article');
   node.className = 'editor-music';
-  node.style.fontSize = `${Math.round(11 * scale)}px`;
+  node.style.fontSize = `${Math.round((element.style.fontSize || 14) * scale * 10) / 10}px`;
+  const music = state.configuration.musicPlayer;
+  const cover = document.createElement('img');
+  cover.className = 'editor-music-cover';
+  cover.src = music.cover?.url || '/assets/logo.png';
+  cover.alt = '';
   const play = document.createElement('b');
+  play.className = 'editor-music-toggle';
   play.textContent = '▶';
   play.style.width = `${Math.round(30 * scale)}px`;
   play.style.height = `${Math.round(30 * scale)}px`;
-  const label = document.createElement('span');
-  label.textContent = element.content || 'Music Player';
-  node.append(play, label);
+  const details = document.createElement('span');
+  details.className = 'editor-music-details';
+  const title = document.createElement('strong');
+  title.textContent = music.title || 'عنوان الأغنية';
+  const artist = document.createElement('small');
+  artist.textContent = music.artist || 'الفنان';
+  const progress = document.createElement('i');
+  progress.className = 'editor-music-progress';
+  details.append(title, artist, progress);
+  node.append(cover, play, details);
   return node;
+}
+
+function contentShell(element, content = contentNode(element, responsive.resolveElementLayout(element, mobilePreviewActive()))) {
+  const shell = document.createElement('div');
+  shell.className = 'editor-element-content';
+  shell.style.transform = `rotate(${element.style.rotation || 0}deg) scaleX(${element.style.flipX ? -1 : 1})`;
+  content.style.width = '100%';
+  content.style.height = '100%';
+  shell.append(content);
+  return shell;
 }
 
 function renderPreview() {
   preview.replaceChildren();
   renderBackground();
+  const tabs = state.configuration.tabs;
+  if (!tabs.some((tab) => tab.id === activeTabId)) activeTabId = tabs[0]?.id || null;
   [...state.configuration.elements]
     .sort((first, second) => first.zIndex - second.zIndex)
     .forEach((element) => {
@@ -338,29 +543,52 @@ function renderPreview() {
       node.className = 'editor-element';
       node.dataset.id = element.id;
       node.dataset.label = elementLabel(element);
+      node.tabIndex = 0;
+      node.setAttribute('role', 'group');
+      node.setAttribute('aria-label', element.name || elementLabel(element));
       node.classList.toggle('is-selected', state.selectedId === element.id);
       node.classList.toggle('is-hidden', !layout.visible);
-      node.hidden = mobilePreviewActive() && !layout.visible;
+      const belongsToActiveTab = !tabs.length || !element.tabId || element.tabId === activeTabId;
+      node.hidden = !belongsToActiveTab || (mobilePreviewActive() && !layout.visible);
       if (element.type === 'image' && element.style.animation && element.style.animation !== 'none') node.classList.add(`image-animation-${element.style.animation}`);
       applyGeometry(node, element, layout);
-      const content = contentNode(element, layout);
-      content.style.width = '100%';
-      content.style.height = '100%';
-      node.append(content);
+      node.append(contentShell(element, contentNode(element, layout)));
+      applyContentScale(node, element, layout);
       if (state.selectedId === element.id) {
-        const handle = document.createElement('i');
-        handle.className = 'resize-handle';
-        handle.setAttribute('aria-label', 'تغيير الحجم');
-        node.append(handle);
+        RESIZE_HANDLES.forEach((corner) => {
+          const handle = document.createElement('button');
+          handle.type = 'button';
+          handle.className = `resize-handle handle-${corner}`;
+          handle.dataset.resizeHandle = corner;
+          handle.setAttribute('aria-label', `تغيير الحجم من زاوية ${corner}`);
+          node.append(handle);
+        });
       }
       preview.append(node);
     });
-  if (state.configuration.musicPlayer.enabled) {
+  if (tabs.length) {
+    const navigation = document.createElement('nav');
+    navigation.className = 'editor-preview-tabs';
+    navigation.setAttribute('aria-label', 'معاينة التبويبات');
+    tabs.forEach((tab) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.previewTab = tab.id;
+      button.classList.toggle('is-active', tab.id === activeTabId);
+      button.classList.toggle('is-hidden-tab', tab.visible === false);
+      button.textContent = tab.label;
+      navigation.append(button);
+    });
+    preview.append(navigation);
+  }
+  const hasMusicElement = state.configuration.elements.some((element) => element.type === 'music' && element.visible !== false);
+  if (state.configuration.musicPlayer.enabled && !hasMusicElement) {
     const player = document.createElement('div');
     player.className = `preview-music-player preset-${state.configuration.musicPlayer.preset}`;
     player.textContent = `▶ ${state.configuration.musicPlayer.title || 'عنوان الأغنية'} — ${state.configuration.musicPlayer.artist || 'الفنان'}`;
     preview.append(player);
   }
+  renderEntrancePreview();
 }
 
 function renderLayers() {
@@ -381,14 +609,18 @@ function renderLayers() {
     visibility.type = 'button';
     visibility.dataset.action = 'visibility';
     visibility.textContent = element.visible ? '◉' : '○';
+    visibility.setAttribute('aria-label', element.visible ? 'إخفاء العنصر' : 'إظهار العنصر');
+    visibility.title = element.visible ? 'إخفاء' : 'إظهار';
     const up = document.createElement('button');
     up.type = 'button';
     up.dataset.action = 'up';
     up.textContent = '↑';
+    up.setAttribute('aria-label', 'تحريك الطبقة للأمام');
     const down = document.createElement('button');
     down.type = 'button';
     down.dataset.action = 'down';
     down.textContent = '↓';
+    down.setAttribute('aria-label', 'تحريك الطبقة للخلف');
     row.append(selectButton, visibility, up, down);
     layersList.append(row);
   });
@@ -415,11 +647,17 @@ function selectField(label, key, value, options, attribute = 'data-design-field'
   return `<label>${label}<select ${attribute}="${key}">${choices}</select></label>`;
 }
 
+function pixelField(label, axis, value) {
+  return `<label>${label}<input data-pixel-field="${axis}" type="number" value="${value}" min="24" max="4000" step="1" inputmode="numeric" /></label>`;
+}
+
 function renderDesignControls() {
   const background = state.configuration.background;
   const gradient = background.gradient || { from: '#100d1d', to: '#42266f', angle: 135 };
   const asset = background.asset || { position: 'center', fit: 'cover', crop: { x: 50, y: 50 } };
-  designControls.innerHTML = `<h3>تصميم الصفحة</h3><details open><summary>الخلفية</summary><div>${selectField('النوع', 'background.type', background.type, [['solid', 'لون ثابت'], ['gradient', 'تدرج'], ['image', 'صورة'], ['gif', 'GIF'], ['video', 'فيديو']])}${field('لون الخلفية', 'background.color', background.color || '#100d1d', 'text', 'data-design-field="background.color"')}${field('لون التدرج الأول', 'background.gradient.from', gradient.from, 'text', 'data-design-field="background.gradient.from"')}${field('لون التدرج الثاني', 'background.gradient.to', gradient.to, 'text', 'data-design-field="background.gradient.to"')}${field('زاوية التدرج', 'background.gradient.angle', gradient.angle, 'number', 'data-design-field="background.gradient.angle" min="0" max="360"')}<label class="upload-field">رفع صورة أو GIF أو فيديو<input data-upload="background" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" /></label>${selectField('الموضع', 'background.asset.position', asset.position, [['center', 'الوسط'], ['top', 'أعلى'], ['bottom', 'أسفل'], ['left', 'يسار'], ['right', 'يمين']])}${selectField('الحجم', 'background.asset.fit', asset.fit, [['cover', 'تغطية'], ['contain', 'احتواء']])}${field('Blur', 'background.blur', background.blur, 'number', 'data-design-field="background.blur" min="0" max="32"')}${field('Brightness', 'background.brightness', background.brightness, 'number', 'data-design-field="background.brightness" min="0.2" max="1.5" step="0.05"')}${field('لون الطبقة العلوية', 'background.overlayColor', background.overlayColor || '#000000', 'text', 'data-design-field="background.overlayColor"')}${field('شفافية الطبقة', 'background.overlayOpacity', background.overlayOpacity, 'number', 'data-design-field="background.overlayOpacity" min="0" max="1" step="0.05"')}${field('Vignette', 'background.vignette', background.vignette, 'number', 'data-design-field="background.vignette" min="0" max="1" step="0.05"')}${field('Grain', 'background.grain', background.grain, 'number', 'data-design-field="background.grain" min="0" max="1" step="0.05"')}</div></details>`;
+  const removeAsset = background.asset ? '<button type="button" data-background-action="remove-background">إزالة وسائط الخلفية</button>' : '';
+  const controls = `${selectField('النوع', 'background.type', background.type, [['solid', 'لون ثابت'], ['gradient', 'تدرج'], ['image', 'صورة'], ['gif', 'GIF'], ['video', 'فيديو']])}${field('لون الخلفية', 'background.color', background.color || '#100d1d', 'text', 'data-design-field="background.color"')}${field('لون التدرج الأول', 'background.gradient.from', gradient.from, 'text', 'data-design-field="background.gradient.from"')}${field('لون التدرج الثاني', 'background.gradient.to', gradient.to, 'text', 'data-design-field="background.gradient.to"')}${field('زاوية التدرج', 'background.gradient.angle', gradient.angle, 'number', 'data-design-field="background.gradient.angle" min="0" max="360"')}<label class="upload-field">رفع صورة أو GIF (8MB) أو فيديو (25MB)<input data-upload="background" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" /></label>${removeAsset}${selectField('الموضع', 'background.asset.position', asset.position, [['center', 'الوسط'], ['top', 'أعلى'], ['bottom', 'أسفل'], ['left', 'يسار'], ['right', 'يمين']])}${selectField('الحجم', 'background.asset.fit', asset.fit, [['cover', 'تغطية'], ['contain', 'احتواء']])}${field('موضع القص أفقيًا', 'background.asset.crop.x', asset.crop?.x ?? 50, 'number', 'data-design-field="background.asset.crop.x" min="0" max="100"')}${field('موضع القص عموديًا', 'background.asset.crop.y', asset.crop?.y ?? 50, 'number', 'data-design-field="background.asset.crop.y" min="0" max="100"')}${field('Blur', 'background.blur', background.blur, 'number', 'data-design-field="background.blur" min="0" max="32"')}${field('Brightness', 'background.brightness', background.brightness, 'number', 'data-design-field="background.brightness" min="0.2" max="1.5" step="0.05"')}${field('لون الطبقة العلوية', 'background.overlayColor', background.overlayColor || '#000000', 'text', 'data-design-field="background.overlayColor"')}${field('شفافية الطبقة', 'background.overlayOpacity', background.overlayOpacity, 'number', 'data-design-field="background.overlayOpacity" min="0" max="1" step="0.05"')}${field('Vignette', 'background.vignette', background.vignette, 'number', 'data-design-field="background.vignette" min="0" max="1" step="0.05"')}${field('Grain', 'background.grain', background.grain, 'number', 'data-design-field="background.grain" min="0" max="1" step="0.05"')}`;
+  designControls.innerHTML = `<h3>تصميم الصفحة</h3><details open><summary>الخلفية</summary><div>${controls}</div></details>`;
 }
 
 const STICKERS = [
@@ -431,25 +669,49 @@ function profileInspectorFields() {
   const profile = state.configuration.profileCard;
   const avatar = state.configuration.avatar;
   const banner = state.configuration.banner;
-  return `${field('لون البطاقة', 'profileCard.backgroundColor', profile.backgroundColor)}${field('شفافية البطاقة', 'profileCard.opacity', profile.opacity, 'number', 'min="0" max="1" step="0.05"')}${field('Blur البطاقة', 'profileCard.blur', profile.blur, 'number', 'min="0" max="32"')}${field('لون الإطار', 'profileCard.borderColor', profile.borderColor)}${field('سمك الإطار', 'profileCard.borderWidth', profile.borderWidth, 'number', 'min="0" max="8"')}${field('استدارة الحواف', 'profileCard.borderRadius', profile.borderRadius, 'number', 'min="0" max="64"')}${field('عرض البطاقة', 'profileCard.width', profile.width, 'number', 'min="280" max="900"')}${field('المساحة الداخلية', 'profileCard.padding', profile.padding, 'number', 'min="12" max="80"')}<label class="switch-field">Glass<input data-field="profileCard.glass" type="checkbox" ${profile.glass ? 'checked' : ''} /></label><label class="switch-field">Glow<input data-field="profileCard.glow" type="checkbox" ${profile.glow ? 'checked' : ''} /></label>${selectField('الظل', 'profileCard.shadow', profile.shadow, [['none', 'بدون'], ['soft', 'خفيف'], ['strong', 'قوي']], 'data-field')}${selectField('المحاذاة', 'profileCard.alignment', profile.alignment, [['left', 'يسار'], ['center', 'وسط'], ['right', 'يمين']], 'data-field')}<label class="upload-field">رفع الصورة الشخصية<input data-upload="avatar" type="file" accept="image/jpeg,image/png,image/webp,image/gif" /></label>${field('حجم الصورة', 'avatar.size', avatar.size, 'number', 'min="48" max="240"')}${selectField('الشكل', 'avatar.shape', avatar.shape, [['circle', 'دائري'], ['rounded-square', 'مربع دائري'], ['square', 'مربع']], 'data-field')}${field('لون إطار الصورة', 'avatar.borderColor', avatar.borderColor)}${field('سمك إطار الصورة', 'avatar.borderWidth', avatar.borderWidth, 'number', 'min="0" max="8"')}${field('موضع قص الصورة أفقيًا', 'avatar.asset.crop.x', avatar.asset?.crop?.x ?? 50, 'number', 'min="0" max="100"')}${field('موضع قص الصورة عموديًا', 'avatar.asset.crop.y', avatar.asset?.crop?.y ?? 50, 'number', 'min="0" max="100"')}<label class="switch-field">Glow للصورة<input data-field="avatar.glow" type="checkbox" ${avatar.glow ? 'checked' : ''} /></label>${selectField('ظل الصورة', 'avatar.shadow', avatar.shadow, [['none', 'بدون'], ['soft', 'خفيف'], ['strong', 'قوي']], 'data-field')}<label class="switch-field">إظهار البانر<input data-field="banner.visible" type="checkbox" ${banner.visible ? 'checked' : ''} /></label><label class="upload-field">رفع البانر<input data-upload="banner" type="file" accept="image/jpeg,image/png,image/webp,image/gif" /></label>${field('استدارة البانر', 'banner.borderRadius', banner.borderRadius, 'number', 'min="0" max="64"')}${field('موضع قص البانر أفقيًا', 'banner.asset.crop.x', banner.asset?.crop?.x ?? 50, 'number', 'min="0" max="100"')}${field('موضع قص البانر عموديًا', 'banner.asset.crop.y', banner.asset?.crop?.y ?? 50, 'number', 'min="0" max="100"')}`;
+  const identity = `<fieldset class="inspector-group"><legend>المحتوى</legend><label>اسم العرض<input data-page-value="displayName" value="${escapeHtml(currentPage.displayName || '')}" minlength="1" maxlength="120" required /></label><label>النبذة<textarea data-page-value="bio" maxlength="500" rows="4">${escapeHtml(currentPage.bio || '')}</textarea></label></fieldset>`;
+  const card = `<fieldset class="inspector-group"><legend>البطاقة</legend>${field('لون البطاقة', 'profileCard.backgroundColor', profile.backgroundColor)}${field('شفافية البطاقة', 'profileCard.opacity', profile.opacity, 'number', 'min="0" max="1" step="0.05"')}${field('Blur البطاقة', 'profileCard.blur', profile.blur, 'number', 'min="0" max="32"')}${field('لون الإطار', 'profileCard.borderColor', profile.borderColor)}${field('سمك الإطار', 'profileCard.borderWidth', profile.borderWidth, 'number', 'min="0" max="8"')}${field('استدارة الحواف', 'profileCard.borderRadius', profile.borderRadius, 'number', 'min="0" max="64"')}${field('المساحة الداخلية', 'profileCard.padding', profile.padding, 'number', 'min="12" max="80"')}<label class="switch-field">Glass<input data-field="profileCard.glass" type="checkbox" ${profile.glass ? 'checked' : ''} /></label><label class="switch-field">Glow<input data-field="profileCard.glow" type="checkbox" ${profile.glow ? 'checked' : ''} /></label>${selectField('الظل', 'profileCard.shadow', profile.shadow, [['none', 'بدون'], ['soft', 'خفيف'], ['strong', 'قوي']], 'data-field')}${selectField('المحاذاة', 'profileCard.alignment', profile.alignment, [['left', 'يسار'], ['center', 'وسط'], ['right', 'يمين']], 'data-field')}</fieldset>`;
+  const avatarFields = `<fieldset class="inspector-group"><legend>الصورة الشخصية</legend><label class="upload-field">رفع الصورة الشخصية<input data-upload="avatar" type="file" accept="image/jpeg,image/png,image/webp,image/gif" /></label>${field('حجم الصورة', 'avatar.size', avatar.size, 'number', 'min="48" max="240"')}${selectField('الشكل', 'avatar.shape', avatar.shape, [['circle', 'دائري'], ['rounded-square', 'مربع دائري'], ['square', 'مربع']], 'data-field')}${field('لون الإطار', 'avatar.borderColor', avatar.borderColor)}${field('سمك الإطار', 'avatar.borderWidth', avatar.borderWidth, 'number', 'min="0" max="8"')}${field('موضع القص أفقيًا', 'avatar.asset.crop.x', avatar.asset?.crop?.x ?? 50, 'number', 'min="0" max="100"')}${field('موضع القص عموديًا', 'avatar.asset.crop.y', avatar.asset?.crop?.y ?? 50, 'number', 'min="0" max="100"')}<label class="switch-field">Glow<input data-field="avatar.glow" type="checkbox" ${avatar.glow ? 'checked' : ''} /></label>${selectField('الظل', 'avatar.shadow', avatar.shadow, [['none', 'بدون'], ['soft', 'خفيف'], ['strong', 'قوي']], 'data-field')}</fieldset>`;
+  const bannerFields = `<fieldset class="inspector-group"><legend>البانر</legend><label class="switch-field">إظهار البانر<input data-field="banner.visible" type="checkbox" ${banner.visible ? 'checked' : ''} /></label><label class="upload-field">رفع البانر<input data-upload="banner" type="file" accept="image/jpeg,image/png,image/webp,image/gif" /></label>${field('استدارة البانر', 'banner.borderRadius', banner.borderRadius, 'number', 'min="0" max="64"')}${field('موضع القص أفقيًا', 'banner.asset.crop.x', banner.asset?.crop?.x ?? 50, 'number', 'min="0" max="100"')}${field('موضع القص عموديًا', 'banner.asset.crop.y', banner.asset?.crop?.y ?? 50, 'number', 'min="0" max="100"')}</fieldset>`;
+  const typography = `<fieldset class="inspector-group"><legend>خط الاسم</legend>${textStyleInspectorFields(state.configuration.typography.displayName, 'typography.displayName')}</fieldset><fieldset class="inspector-group"><legend>خط النبذة</legend>${textStyleInspectorFields(state.configuration.typography.bio, 'typography.bio')}</fieldset>`;
+  return `${identity}${card}${avatarFields}${bannerFields}${typography}`;
+}
+
+function textStyleInspectorFields(style, prefix) {
+  return `${selectField('الخط', `${prefix}.fontFamily`, style.fontFamily || 'Cairo', [['Cairo', 'Cairo'], ['Space Grotesk', 'Space Grotesk'], ['Arial', 'Arial'], ['Georgia', 'Georgia'], ['Times New Roman', 'Times New Roman'], ['Verdana', 'Verdana']], 'data-field')}${field('الحجم', `${prefix}.fontSize`, style.fontSize || 18, 'number', 'min="10" max="96"')}${selectField('الوزن', `${prefix}.fontWeight`, style.fontWeight || '400', [['400', 'عادي'], ['500', 'متوسط'], ['600', 'شبه عريض'], ['700', 'عريض'], ['800', 'ثقيل']], 'data-field')}${field('لون النص', `${prefix}.color`, style.color || '#fff7dc')}${selectField('المحاذاة', `${prefix}.textAlign`, style.textAlign || 'right', [['right', 'يمين'], ['center', 'وسط'], ['left', 'يسار']], 'data-field')}${field('تباعد الحروف', `${prefix}.letterSpacing`, style.letterSpacing || 0, 'number', 'min="-2" max="16" step="0.1"')}${field('ارتفاع السطر', `${prefix}.lineHeight`, style.lineHeight || 1.4, 'number', 'min="0.8" max="3" step="0.1"')}${selectField('التأثير', `${prefix}.effect`, style.effect || 'none', [['none', 'بدون'], ['gradient', 'تدرج'], ['glow', 'Glow'], ['shimmer', 'Shimmer'], ['typewriter', 'Typewriter'], ['wave', 'Wave']], 'data-field')}`;
+}
+
+function designTextStyleFields(style, prefix) {
+  return `${selectField('الخط', `${prefix}.fontFamily`, style.fontFamily, [['Cairo', 'Cairo'], ['Space Grotesk', 'Space Grotesk'], ['Arial', 'Arial'], ['Georgia', 'Georgia'], ['Times New Roman', 'Times New Roman'], ['Verdana', 'Verdana']])}${field('الحجم', `${prefix}.fontSize`, style.fontSize, 'number', `data-design-field="${prefix}.fontSize" min="10" max="96"`)}${selectField('الوزن', `${prefix}.fontWeight`, style.fontWeight, [['400', 'عادي'], ['500', 'متوسط'], ['600', 'شبه عريض'], ['700', 'عريض'], ['800', 'ثقيل']])}${field('اللون', `${prefix}.color`, style.color, 'text', `data-design-field="${prefix}.color"`)}${selectField('المحاذاة', `${prefix}.textAlign`, style.textAlign, [['right', 'يمين'], ['center', 'وسط'], ['left', 'يسار']])}${field('تباعد الحروف', `${prefix}.letterSpacing`, style.letterSpacing, 'number', `data-design-field="${prefix}.letterSpacing" min="-2" max="16" step="0.1"`)}${field('ارتفاع السطر', `${prefix}.lineHeight`, style.lineHeight, 'number', `data-design-field="${prefix}.lineHeight" min="0.8" max="3" step="0.1"`)}${selectField('التأثير', `${prefix}.effect`, style.effect, [['none', 'بدون'], ['gradient', 'تدرج'], ['glow', 'Glow'], ['shimmer', 'Shimmer'], ['typewriter', 'Typewriter'], ['wave', 'Wave']])}`;
 }
 
 function typographyInspectorFields(element) {
-  const style = element.style;
-  return `${selectField('الخط', 'style.fontFamily', style.fontFamily || 'Cairo', [['Cairo', 'Cairo'], ['Space Grotesk', 'Space Grotesk'], ['Arial', 'Arial'], ['Georgia', 'Georgia'], ['Times New Roman', 'Times New Roman'], ['Verdana', 'Verdana']], 'data-field')}${field('الحجم', 'style.fontSize', style.fontSize || 18, 'number', 'min="10" max="96"')}${selectField('الوزن', 'style.fontWeight', style.fontWeight || '400', [['400', 'عادي'], ['500', 'متوسط'], ['600', 'شبه عريض'], ['700', 'عريض'], ['800', 'ثقيل']], 'data-field')}${field('لون النص', 'style.color', style.color || '#fff7dc')}${selectField('المحاذاة', 'style.textAlign', style.textAlign || 'right', [['right', 'يمين'], ['center', 'وسط'], ['left', 'يسار']], 'data-field')}${field('تباعد الحروف', 'style.letterSpacing', style.letterSpacing || 0, 'number', 'min="-2" max="16" step="0.1"')}${field('ارتفاع السطر', 'style.lineHeight', style.lineHeight || 1.4, 'number', 'min="0.8" max="3" step="0.1"')}${selectField('التأثير', 'style.effect', style.effect || 'none', [['none', 'بدون'], ['gradient', 'تدرج'], ['glow', 'Glow'], ['shimmer', 'Shimmer'], ['typewriter', 'Typewriter'], ['wave', 'Wave']], 'data-field')}`;
+  return textStyleInspectorFields(element.style, 'style');
 }
 
 function widgetInspectorFields(element) {
   const data = element.widgetData;
-  if (data.kind === 'quote') return `${field('النص', 'widgetData.text', data.text)}${field('الكاتب', 'widgetData.author', data.author)}`;
-  if (data.kind === 'mood') return `${field('المزاج', 'widgetData.text', data.text)}${field('الأيقونة', 'widgetData.icon', data.icon)}`;
-  if (data.kind === 'characters' || data.kind === 'games') return data.items.map((item, index) => `${field('الاسم', `widgetData.items.${index}.name`, item.name)}${field('رابط الصورة', `widgetData.items.${index}.image.url`, item.image.url, 'url')}<label class="upload-field">رفع صورة<input data-upload="widget-image" data-widget-index="${index}" type="file" accept="image/jpeg,image/png,image/webp,image/gif" /></label>`).join('') + `<button type="button" data-widget-action="item">+ إضافة</button>`;
-  if (data.kind === 'gallery') return `${selectField('التخطيط', 'widgetData.layout', data.layout, [['grid', 'Grid'], ['polaroid', 'Polaroid'], ['masonry', 'Masonry']], 'data-field')}${data.items.map((item, index) => `${field('رابط الصورة', `widgetData.items.${index}.image.url`, item.image.url, 'url')}${field('التعليق', `widgetData.items.${index}.caption`, item.caption || '')}<label class="upload-field">رفع صورة<input data-upload="widget-image" data-widget-index="${index}" type="file" accept="image/jpeg,image/png,image/webp,image/gif" /></label>`).join('')}<button type="button" data-widget-action="item">+ إضافة صورة</button>`;
-  if (data.kind === 'counter') return field('العنوان', 'widgetData.label', data.label);
-  if (data.kind === 'clock') return `${selectField('النظام', 'widgetData.format', data.format, [['12h', '12 ساعة'], ['24h', '24 ساعة']], 'data-field')}<label class="switch-field">الثواني<input data-field="widgetData.showSeconds" type="checkbox" ${data.showSeconds ? 'checked' : ''} /></label>`;
-  if (data.kind === 'countdown') return `${field('العنوان', 'widgetData.title', data.title)}${field('الموعد', 'widgetData.targetDate', data.targetDate.slice(0, 16), 'datetime-local')}${field('بعد الانتهاء', 'widgetData.finishedText', data.finishedText)}`;
-  if (data.kind === 'poll') return `${field('السؤال', 'widgetData.question', data.question)}${data.options.map((option, index) => field('خيار', `widgetData.options.${index}.label`, option.label)).join('')}<button type="button" data-widget-action="option">+ خيار</button>`;
-  return field('النص', 'widgetData.text', data.text);
+  const appearance = `<fieldset class="inspector-group"><legend>مظهر الـ Widget</legend>${field('حجم النص (px)', 'style.fontSize', element.style.fontSize || 11, 'number', 'min="10" max="96" step="0.5"')}${field('لون النص', 'style.color', element.style.color || '#fff4d4')}${field('لون الخلفية', 'style.backgroundColor', element.style.backgroundColor || '#1c1231')}${field('استدارة الحواف', 'style.borderRadius', element.style.borderRadius ?? 12, 'number', 'min="0" max="100"')}<label class="switch-field">توهج<input data-field="style.glow" type="checkbox" ${element.style.glow ? 'checked' : ''} /></label>${selectField('الظل', 'style.shadow', element.style.shadow || 'none', [['none', 'بدون'], ['soft', 'خفيف'], ['strong', 'قوي']], 'data-field')}</fieldset>`;
+  let controls = '';
+  if (data.kind === 'quote') controls = `${field('النص', 'widgetData.text', data.text)}${field('الكاتب', 'widgetData.author', data.author)}`;
+  else if (data.kind === 'mood') controls = `${field('المزاج', 'widgetData.text', data.text)}${field('الأيقونة', 'widgetData.icon', data.icon)}`;
+  if (data.kind === 'characters' || data.kind === 'games') {
+    const items = data.items.map((item, index) => `<fieldset class="widget-item-fields"><legend>${data.kind === 'characters' ? 'شخصية' : 'لعبة'} ${index + 1}</legend>${field('الاسم', `widgetData.items.${index}.name`, item.name)}${field('رابط الصورة', `widgetData.items.${index}.image.url`, item.image.url, 'url')}<label class="upload-field">رفع صورة<input data-upload="widget-image" data-widget-index="${index}" type="file" accept="image/jpeg,image/png,image/webp,image/gif" /></label><button type="button" data-widget-action="remove-item" data-widget-index="${index}" ${data.items.length === 1 ? 'disabled' : ''}>حذف</button></fieldset>`).join('');
+    controls = `${items}<button type="button" data-widget-action="item" ${data.items.length >= 6 ? 'disabled' : ''}>+ إضافة</button>`;
+  }
+  else if (data.kind === 'gallery') {
+    const items = data.items.map((item, index) => `<fieldset class="widget-item-fields"><legend>صورة ${index + 1}</legend>${field('رابط الصورة', `widgetData.items.${index}.image.url`, item.image.url, 'url')}${field('التعليق', `widgetData.items.${index}.caption`, item.caption || '')}<label class="upload-field">رفع صورة<input data-upload="widget-image" data-widget-index="${index}" type="file" accept="image/jpeg,image/png,image/webp,image/gif" /></label><button type="button" data-widget-action="remove-item" data-widget-index="${index}" ${data.items.length === 1 ? 'disabled' : ''}>حذف</button></fieldset>`).join('');
+    controls = `${selectField('التخطيط', 'widgetData.layout', data.layout, [['grid', 'Grid'], ['polaroid', 'Polaroid'], ['masonry', 'Masonry']], 'data-field')}${items}<button type="button" data-widget-action="item" ${data.items.length >= 12 ? 'disabled' : ''}>+ إضافة صورة</button>`;
+  }
+  else if (data.kind === 'counter') controls = field('العنوان', 'widgetData.label', data.label);
+  else if (data.kind === 'clock') controls = `${selectField('النظام', 'widgetData.format', data.format, [['12h', '12 ساعة'], ['24h', '24 ساعة']], 'data-field')}<label class="switch-field">الثواني<input data-field="widgetData.showSeconds" type="checkbox" ${data.showSeconds ? 'checked' : ''} /></label>`;
+  else if (data.kind === 'countdown') controls = `${field('العنوان', 'widgetData.title', data.title)}${field('الموعد', 'widgetData.targetDate', data.targetDate.slice(0, 16), 'datetime-local')}${field('بعد الانتهاء', 'widgetData.finishedText', data.finishedText)}`;
+  else if (data.kind === 'poll') {
+    const options = data.options.map((option, index) => `<fieldset class="widget-item-fields"><legend>خيار ${index + 1}</legend>${field('النص', `widgetData.options.${index}.label`, option.label)}<button type="button" data-widget-action="remove-option" data-widget-index="${index}" ${data.options.length <= 2 ? 'disabled' : ''}>حذف</button></fieldset>`).join('');
+    controls = `${field('السؤال', 'widgetData.question', data.question)}${options}<button type="button" data-widget-action="option" ${data.options.length >= 4 ? 'disabled' : ''}>+ خيار</button>`;
+  }
+  else if (!controls) controls = field('النص', 'widgetData.text', data.text);
+  return `${controls}${appearance}`;
 }
 
 function socialLinksInspectorFields() {
@@ -464,49 +726,65 @@ function socialLinksInspectorFields() {
 
 function renderMobileInspector() {
   const element = selected();
+  const modeTabs = '<div class="inspector-mode-tabs"><button type="button" data-inspector-mode="content">المحتوى</button><button type="button" data-inspector-mode="mobile" class="is-active">تخطيط الجوال</button></div>';
   if (!element) {
-    inspector.innerHTML = '<p>Select an element to edit its mobile layout.</p>';
+    inspector.innerHTML = `${modeTabs}<p>اختر عنصرًا لتعديل تخطيطه على الجوال.</p>`;
     return;
   }
   const overrides = element.mobileOverrides || {};
   const enabled = element.mobileOverrides !== undefined;
   const toggle = `<label class="switch-field mobile-override-toggle">Mobile override<input data-mobile-override-toggle type="checkbox" ${enabled ? 'checked' : ''} /></label>`;
   if (!enabled) {
-    inspector.innerHTML = `${toggle}<p class="inspector-hint">Enable this override to change only this element on mobile. Desktop settings stay unchanged.</p>`;
+    inspector.innerHTML = `${modeTabs}${toggle}<p class="inspector-hint">فعّل التخصيص لتغيير هذا العنصر على الجوال فقط، دون تعديل تصميم سطح المكتب.</p>`;
     return;
   }
   const layout = responsive.resolveElementLayout(element, true);
   const position = layout.position;
-  inspector.innerHTML = `${toggle}<label class="switch-field">Hide on mobile<input data-field="mobileOverrides.hideOnMobile" type="checkbox" ${overrides.hideOnMobile ? 'checked' : ''} /></label>${field('Mobile X', 'mobileOverrides.mobilePosition.x', position.x, 'number', 'min="0" max="100" step="0.1"')}${field('Mobile Y', 'mobileOverrides.mobilePosition.y', position.y, 'number', 'min="0" max="100" step="0.1"')}${field('Mobile width', 'mobileOverrides.mobileWidth', layout.size.width, 'number', 'min="1" max="100" step="0.1"')}${field('Mobile height', 'mobileOverrides.mobileHeight', layout.size.height, 'number', 'min="1" max="100" step="0.1"')}${field('Mobile scale', 'mobileOverrides.mobileScale', overrides.mobileScale ?? 1, 'number', 'min="0.5" max="2" step="0.05"')}${selectField('Mobile alignment', 'mobileOverrides.mobileAlignment', overrides.mobileAlignment || 'right', [['right', 'Right'], ['center', 'Center'], ['left', 'Left']], 'data-field')}<div class="inspect-actions"><button type="button" data-inspector-action="duplicate">Duplicate</button><button type="button" data-inspector-action="delete">Delete</button></div>`;
+  const fontSize = ['text', 'sticker'].includes(element.type)
+    ? field('حجم المحتوى على الجوال', 'mobileOverrides.fontSize', overrides.fontSize ?? elementFontSize(element, false), 'number', 'min="10" max="96" step="0.5"')
+    : '';
+  const duplicateDisabled = element.type === 'profile-card' || element.type === 'music' || state.configuration.elements.length >= ELEMENT_LIMIT;
+  const deleteDisabled = element.type === 'profile-card';
+  inspector.innerHTML = `${modeTabs}${toggle}<label class="switch-field">إخفاء على الجوال<input data-field="mobileOverrides.hideOnMobile" type="checkbox" ${overrides.hideOnMobile ? 'checked' : ''} /></label>${field('الموضع الأفقي', 'mobileOverrides.mobilePosition.x', position.x, 'number', 'min="0" max="100" step="0.1"')}${field('الموضع العمودي', 'mobileOverrides.mobilePosition.y', position.y, 'number', 'min="0" max="100" step="0.1"')}${field('العرض', 'mobileOverrides.mobileWidth', layout.size.width, 'number', 'min="1" max="100" step="0.1"')}${field('الارتفاع', 'mobileOverrides.mobileHeight', layout.size.height, 'number', 'min="1" max="100" step="0.1"')}${field('المقياس', 'mobileOverrides.mobileScale', overrides.mobileScale ?? 1, 'number', 'min="0.5" max="2" step="0.05"')}${fontSize}${selectField('المحاذاة', 'mobileOverrides.mobileAlignment', overrides.mobileAlignment || 'right', [['right', 'يمين'], ['center', 'وسط'], ['left', 'يسار']], 'data-field')}<div class="inspect-actions"><button type="button" data-inspector-action="duplicate" ${duplicateDisabled ? 'disabled' : ''}>نسخ</button><button type="button" data-inspector-action="delete" ${deleteDisabled ? 'disabled' : ''}>حذف</button></div>`;
 }
 
 function renderInspector() {
-  if (mobilePreviewActive()) {
+  if (mobilePreviewActive() && inspectorMode === 'mobile') {
     renderMobileInspector();
     return;
   }
+  const modeTabs = mobilePreviewActive() ? '<div class="inspector-mode-tabs"><button type="button" data-inspector-mode="content" class="is-active">المحتوى</button><button type="button" data-inspector-mode="mobile">تخطيط الجوال</button></div>' : '';
   const element = selected();
   if (!element) {
-    inspector.innerHTML = '<p>اختر عنصرًا لتعديل خصائصه.</p>';
+    inspector.innerHTML = `${modeTabs}<p>اختر عنصرًا لتعديل خصائصه.</p>`;
     return;
   }
 
   const visibility = `<label class="switch-field">ظاهر<input data-field="visible" type="checkbox" ${element.visible ? 'checked' : ''} /></label>`;
-  const geometry = `${field('الموضع الأفقي', 'position.x', element.position.x, 'number', 'min="0" max="100" step="0.1"')}${field('الموضع العمودي', 'position.y', element.position.y, 'number', 'min="0" max="100" step="0.1"')}${field('العرض', 'size.width', element.size.width, 'number', 'min="1" max="100" step="0.1"')}${field('الارتفاع', 'size.height', element.size.height, 'number', 'min="1" max="100" step="0.1"')}`;
+  const previewRect = preview.getBoundingClientRect();
+  const layout = responsive.resolveElementLayout(element, mobilePreviewActive());
+  const pixelWidth = Math.round(previewRect.width * layout.size.width * layout.scale / 100);
+  const pixelHeight = Math.round(previewRect.height * layout.size.height * layout.scale / 100);
+  const positionPrefix = mobilePreviewActive() && element.mobileOverrides ? 'mobileOverrides.mobilePosition' : 'position';
+  const sizeWidthKey = mobilePreviewActive() && element.mobileOverrides ? 'mobileOverrides.mobileWidth' : 'size.width';
+  const sizeHeightKey = mobilePreviewActive() && element.mobileOverrides ? 'mobileOverrides.mobileHeight' : 'size.height';
+  const geometry = `<fieldset class="inspector-group geometry-fields"><legend>الموضع والحجم</legend><div class="geometry-readout">الحجم المرئي: ${pixelWidth} × ${pixelHeight} px</div><div class="geometry-pixel-grid">${pixelField('العرض (px)', 'width', pixelWidth)}${pixelField('الارتفاع (px)', 'height', pixelHeight)}</div>${field('الموضع الأفقي (%)', `${positionPrefix}.x`, layout.position.x, 'number', 'min="0" max="100" step="0.1"')}${field('الموضع العمودي (%)', `${positionPrefix}.y`, layout.position.y, 'number', 'min="0" max="100" step="0.1"')}${field('العرض (%)', sizeWidthKey, layout.size.width, 'number', 'min="1" max="100" step="0.1"')}${field('الارتفاع (%)', sizeHeightKey, layout.size.height, 'number', 'min="1" max="100" step="0.1"')}</fieldset>`;
   let content = '';
 
   if (element.type === 'profile-card') {
     const profile = state.configuration.profileCard;
     content = `${field('لون البطاقة', 'profileCard.backgroundColor', profile.backgroundColor, 'text')}${field('استدارة الحواف', 'profileCard.borderRadius', profile.borderRadius, 'number', 'min="0" max="64"')}${field('المساحة الداخلية', 'profileCard.padding', profile.padding, 'number', 'min="12" max="80"')}`;
   } else if (element.type === 'text' || element.type === 'sticker') {
-    content = `<label>المحتوى<textarea data-field="content" maxlength="500" rows="3">${escapeHtml(element.content || '')}</textarea></label>${field('لون النص', 'style.color', element.style.color || '#fff7dc', 'text')}`;
+    content = `<label>المحتوى<textarea data-field="content" minlength="1" maxlength="500" rows="3" required>${escapeHtml(element.content || '')}</textarea></label>${field('لون النص', 'style.color', element.style.color || '#fff7dc', 'text')}${element.type === 'sticker' ? field('حجم الملصق (px)', 'style.fontSize', element.style.fontSize || 42, 'number', 'min="10" max="96" step="0.5"') : ''}`;
   } else if (element.type === 'music') {
     const music = state.configuration.musicPlayer;
-    content = `<label class="switch-field">تفعيل المشغل<input data-field="musicPlayer.enabled" type="checkbox" ${music.enabled ? 'checked' : ''} /></label><label class="upload-field">رفع الملف الصوتي<input data-upload="music-audio" type="file" accept="audio/mpeg,audio/ogg,audio/wav,audio/x-wav,audio/mp4" /></label><label class="upload-field">رفع غلاف الأغنية<input data-upload="music-cover" type="file" accept="image/jpeg,image/png,image/webp,image/gif" /></label>${field('اسم الأغنية', 'musicPlayer.title', music.title, 'text', 'maxlength="120"')}${field('الفنان', 'musicPlayer.artist', music.artist, 'text', 'maxlength="120"')}<label class="switch-field">تكرار<input data-field="musicPlayer.loop" type="checkbox" ${music.loop ? 'checked' : ''} /></label>${selectField('شكل المشغل', 'musicPlayer.preset', music.preset, [['minimal', 'Minimal'], ['glass', 'Glass'], ['cd', 'CD'], ['vinyl', 'Vinyl'], ['cassette', 'Cassette'], ['pixel', 'Pixel']], 'data-field')}`;
+    const removeAudio = music.audioUrl ? '<button type="button" data-music-action="remove-audio">إزالة الملف الصوتي</button>' : '';
+    const removeCover = music.cover ? '<button type="button" data-music-action="remove-cover">إزالة الغلاف</button>' : '';
+    content = `<label class="switch-field">تفعيل المشغل<input data-field="musicPlayer.enabled" type="checkbox" ${music.enabled ? 'checked' : ''} /></label><label class="upload-field">رفع الملف الصوتي<input data-upload="music-audio" type="file" accept="audio/mpeg,audio/ogg,audio/wav,audio/x-wav,audio/mp4" /></label>${removeAudio}<label class="upload-field">رفع غلاف الأغنية<input data-upload="music-cover" type="file" accept="image/jpeg,image/png,image/webp,image/gif" /></label>${removeCover}${field('اسم الأغنية', 'musicPlayer.title', music.title, 'text', 'maxlength="120"')}${field('الفنان', 'musicPlayer.artist', music.artist, 'text', 'maxlength="120"')}${field('حجم محتوى المشغل (px)', 'style.fontSize', element.style.fontSize || 14, 'number', 'min="10" max="96" step="0.5"')}<label class="switch-field">تكرار<input data-field="musicPlayer.loop" type="checkbox" ${music.loop ? 'checked' : ''} /></label>${selectField('شكل المشغل', 'musicPlayer.preset', music.preset, [['minimal', 'Minimal'], ['glass', 'Glass'], ['cd', 'CD'], ['vinyl', 'Vinyl'], ['cassette', 'Cassette'], ['pixel', 'Pixel']], 'data-field')}`;
   } else if (element.type === 'image') {
-    content = `${field('رابط الصورة HTTPS', 'assetUrl', element.assetUrl || '', 'url')}${field('استدارة الحواف', 'style.borderRadius', element.style.borderRadius || 12, 'number', 'min="0" max="100"')}`;
+    content = `${field('رابط الصورة HTTPS', 'assetUrl', element.assetUrl || '', 'url')}${field('استدارة الحواف', 'style.borderRadius', element.style.borderRadius || 12, 'number', 'min="0" max="100"')}${selectField('ملاءمة الصورة', 'style.objectFit', element.style.objectFit || 'cover', [['cover', 'تغطية'], ['contain', 'احتواء']], 'data-field')}${selectField('موضع الصورة', 'style.objectPosition', element.style.objectPosition || 'center', [['center', 'الوسط'], ['top', 'أعلى'], ['bottom', 'أسفل'], ['left', 'يسار'], ['right', 'يمين']], 'data-field')}`;
   } else if (element.type === 'social-links') {
-    content = socialLinksInspectorFields();
+    content = `${socialLinksInspectorFields()}<fieldset class="inspector-group"><legend>تنسيق الروابط</legend>${textStyleInspectorFields(state.configuration.typography.link, 'typography.link')}</fieldset>`;
   } else if (element.type === 'widget') {
     content = widgetInspectorFields(element);
   }
@@ -517,9 +795,12 @@ function renderInspector() {
 
   if (element.type === 'profile-card') content = profileInspectorFields();
   if (element.type === 'text') content += typographyInspectorFields(element);
-  if (element.type === 'image') content += `${field('اسم الطبقة', 'name', element.name || '')}${field('الدوران', 'style.rotation', element.style.rotation || 0, 'number', 'min="-180" max="180"')}${field('الشفافية', 'style.opacity', element.style.opacity ?? 1, 'number', 'min="0" max="1" step="0.05"')}<label class="switch-field">قلب أفقي<input data-field="style.flipX" type="checkbox" ${element.style.flipX ? 'checked' : ''} /></label><label class="switch-field">توهج<input data-field="style.glow" type="checkbox" ${element.style.glow ? 'checked' : ''} /></label>${selectField('الظل', 'style.shadow', element.style.shadow || 'none', [['none', 'بدون'], ['soft', 'خفيف'], ['strong', 'قوي']], 'data-field')}${selectField('الحركة', 'style.animation', element.style.animation || 'none', [['none', 'بدون'], ['float', 'طفو'], ['pulse', 'نبض'], ['gentleRotate', 'دوران لطيف'], ['fade', 'تلاشي']], 'data-field')}`;
+  if (element.type === 'image') content += `${field('الدوران', 'style.rotation', element.style.rotation || 0, 'number', 'min="-180" max="180"')}${field('الشفافية', 'style.opacity', element.style.opacity ?? 1, 'number', 'min="0" max="1" step="0.05"')}<label class="switch-field">قلب أفقي<input data-field="style.flipX" type="checkbox" ${element.style.flipX ? 'checked' : ''} /></label><label class="switch-field">توهج<input data-field="style.glow" type="checkbox" ${element.style.glow ? 'checked' : ''} /></label>${selectField('الظل', 'style.shadow', element.style.shadow || 'none', [['none', 'بدون'], ['soft', 'خفيف'], ['strong', 'قوي']], 'data-field')}${selectField('الحركة', 'style.animation', element.style.animation || 'none', [['none', 'بدون'], ['float', 'طفو'], ['pulse', 'نبض'], ['gentleRotate', 'دوران لطيف'], ['fade', 'تلاشي']], 'data-field')}`;
   if (element.type === 'image') content += '<label class="upload-field">رفع صورة<input data-upload="image" type="file" accept="image/jpeg,image/png,image/webp,image/gif" /></label>';
-  inspector.innerHTML = `${visibility}${geometry}${tab}${content}<div class="inspect-actions"><button type="button" data-inspector-action="duplicate">نسخ</button><button type="button" data-inspector-action="delete">حذف</button></div>`;
+  const layerName = element.type === 'profile-card' ? '' : field('اسم الطبقة', 'name', element.name || '');
+  const duplicateDisabled = element.type === 'profile-card' || element.type === 'music' || state.configuration.elements.length >= ELEMENT_LIMIT;
+  const deleteDisabled = element.type === 'profile-card';
+  inspector.innerHTML = `${modeTabs}${visibility}${layerName}${geometry}${tab}${content}<div class="inspect-actions"><button type="button" data-inspector-action="duplicate" ${duplicateDisabled ? 'disabled' : ''}>نسخ</button><button type="button" data-inspector-action="delete" ${deleteDisabled ? 'disabled' : ''}>حذف</button></div>`;
 }
 
 function renderStickerLibrary() {
@@ -535,12 +816,15 @@ function renderExperienceControls() {
   const music = state.configuration.musicPlayer;
   const entrance = state.configuration.entranceScreen;
   const cursor = state.configuration.cursor;
-  designControls.insertAdjacentHTML('beforeend', `<details><summary>الموسيقى</summary><div><label class="switch-field">تفعيل المشغل<input data-design-field="musicPlayer.enabled" type="checkbox" ${music.enabled ? 'checked' : ''} /></label><label class="upload-field">رفع ملف صوتي (MP3, OGG, WAV, M4A — حتى 15MB)<input data-upload="music-audio" type="file" accept="audio/mpeg,audio/ogg,audio/wav,audio/x-wav,audio/mp4" /></label><label class="upload-field">رفع الغلاف<input data-upload="music-cover" type="file" accept="image/jpeg,image/png,image/webp,image/gif" /></label>${field('العنوان', 'musicPlayer.title', music.title, 'text', 'data-design-field="musicPlayer.title" maxlength="120"')}${field('الفنان', 'musicPlayer.artist', music.artist, 'text', 'data-design-field="musicPlayer.artist" maxlength="120"')}<label class="switch-field">تكرار<input data-design-field="musicPlayer.loop" type="checkbox" ${music.loop ? 'checked' : ''} /></label>${selectField('النمط', 'musicPlayer.preset', music.preset, [['minimal', 'Minimal'], ['glass', 'Glass'], ['cd', 'CD'], ['vinyl', 'Vinyl'], ['cassette', 'Cassette'], ['pixel', 'Pixel']])}</div></details><details><summary>شاشة الدخول</summary><div><label class="switch-field">تفعيل شاشة الدخول<input data-design-field="entranceScreen.enabled" type="checkbox" ${entrance.enabled ? 'checked' : ''} /></label><label class="upload-field">صورة شاشة الدخول<input data-upload="entrance-background" type="file" accept="image/jpeg,image/png,image/webp,image/gif" /></label>${field('لون الخلفية', 'entranceScreen.backgroundColor', entrance.backgroundColor, 'text', 'data-design-field="entranceScreen.backgroundColor"')}${field('النص', 'entranceScreen.text', entrance.text, 'text', 'data-design-field="entranceScreen.text" maxlength="120"')}${field('حجم النص', 'entranceScreen.textStyle.fontSize', entrance.textStyle.fontSize, 'number', 'data-design-field="entranceScreen.textStyle.fontSize" min="10" max="96"')}${field('لون النص', 'entranceScreen.textStyle.color', entrance.textStyle.color, 'text', 'data-design-field="entranceScreen.textStyle.color"')}${selectField('الانتقال', 'entranceScreen.transition', entrance.transition, [['fade', 'Fade'], ['blurFade', 'Blur fade'], ['zoomFade', 'Zoom fade'], ['pixelLike', 'Pixel like']])}</div></details><details><summary>المؤشر</summary><div>${selectField('نوع المؤشر', 'cursor.type', cursor.type, [['default', 'الافتراضي'], ['image', 'صورة مخصصة']])}<label class="upload-field">صورة مؤشر مخصصة<input data-upload="cursor-image" type="file" accept="image/jpeg,image/png,image/webp,image/gif" /></label>${selectField('أثر المؤشر', 'cursor.trail', cursor.trail, [['none', 'بدون'], ['stars', 'نجوم'], ['hearts', 'قلوب'], ['sparkles', 'بريق'], ['bubbles', 'فقاعات']])}${field('لون الأثر', 'cursor.color', cursor.color, 'text', 'data-design-field="cursor.color"')}</div></details>`);
+  const musicControls = `<details><summary>الموسيقى</summary><div><label class="switch-field">تفعيل المشغل<input data-design-field="musicPlayer.enabled" type="checkbox" ${music.enabled ? 'checked' : ''} /></label><label class="upload-field">رفع ملف صوتي (MP3, OGG, WAV, M4A — حتى 15MB)<input data-upload="music-audio" type="file" accept="audio/mpeg,audio/ogg,audio/wav,audio/x-wav,audio/mp4" /></label>${music.audioUrl ? '<button type="button" data-music-action="remove-audio">إزالة الملف الصوتي</button>' : ''}<label class="upload-field">رفع الغلاف<input data-upload="music-cover" type="file" accept="image/jpeg,image/png,image/webp,image/gif" /></label>${music.cover ? '<button type="button" data-music-action="remove-cover">إزالة الغلاف</button>' : ''}${field('العنوان', 'musicPlayer.title', music.title, 'text', 'data-design-field="musicPlayer.title" maxlength="120"')}${field('الفنان', 'musicPlayer.artist', music.artist, 'text', 'data-design-field="musicPlayer.artist" maxlength="120"')}<label class="switch-field">تكرار<input data-design-field="musicPlayer.loop" type="checkbox" ${music.loop ? 'checked' : ''} /></label>${selectField('النمط', 'musicPlayer.preset', music.preset, [['minimal', 'Minimal'], ['glass', 'Glass'], ['cd', 'CD'], ['vinyl', 'Vinyl'], ['cassette', 'Cassette'], ['pixel', 'Pixel']])}</div></details>`;
+  const entranceControls = `<details><summary>شاشة الدخول</summary><div><label class="switch-field">تفعيل شاشة الدخول<input data-design-field="entranceScreen.enabled" type="checkbox" ${entrance.enabled ? 'checked' : ''} /></label>${entrance.enabled ? '<button type="button" data-experience-action="preview-entrance">معاينة شاشة الدخول</button>' : ''}<label class="upload-field">صورة شاشة الدخول<input data-upload="entrance-background" type="file" accept="image/jpeg,image/png,image/webp,image/gif" /></label>${entrance.background ? '<button type="button" data-experience-action="remove-entrance-background">إزالة الصورة</button>' : ''}${field('لون الخلفية', 'entranceScreen.backgroundColor', entrance.backgroundColor, 'text', 'data-design-field="entranceScreen.backgroundColor"')}${field('النص', 'entranceScreen.text', entrance.text, 'text', 'data-design-field="entranceScreen.text" maxlength="120"')}${designTextStyleFields(entrance.textStyle, 'entranceScreen.textStyle')}${selectField('الانتقال', 'entranceScreen.transition', entrance.transition, [['fade', 'Fade'], ['blurFade', 'Blur fade'], ['zoomFade', 'Zoom fade'], ['pixelLike', 'Pixel like']])}</div></details>`;
+  const cursorControls = `<details><summary>المؤشر</summary><div>${selectField('نوع المؤشر', 'cursor.type', cursor.type, [['default', 'الافتراضي'], ['image', 'صورة مخصصة']])}<label class="upload-field">صورة مؤشر مخصصة<input data-upload="cursor-image" type="file" accept="image/jpeg,image/png,image/webp,image/gif" /></label>${cursor.image ? '<button type="button" data-experience-action="remove-cursor-image">إزالة صورة المؤشر</button>' : ''}${selectField('أثر المؤشر', 'cursor.trail', cursor.trail, [['none', 'بدون'], ['stars', 'نجوم'], ['hearts', 'قلوب'], ['sparkles', 'بريق'], ['bubbles', 'فقاعات']])}${field('لون الأثر', 'cursor.color', cursor.color, 'text', 'data-design-field="cursor.color"')}</div></details>`;
+  designControls.insertAdjacentHTML('beforeend', `${musicControls}${entranceControls}${cursorControls}`);
 }
 
 function renderTabsControls() {
   const tabs = state.configuration.tabs;
-  designControls.insertAdjacentHTML('beforeend', `<details><summary>التبويبات</summary><div class="tabs-editor-list">${tabs.map((tab, index) => `${field('الاسم', `tabs.${index}.label`, tab.label, 'text', `data-design-field="tabs.${index}.label" maxlength="40"`)}${selectField('الانتقال', `tabs.${index}.transition`, tab.transition, [['fade', 'Fade'], ['slide', 'Slide'], ['blur', 'Blur']])}<button type="button" data-tab-remove="${tab.id}">حذف ${tab.label}</button>`).join('')}<button type="button" data-tab-add ${tabs.length >= 5 ? 'disabled' : ''}>+ إضافة تبويب</button></div></details>`);
+  designControls.insertAdjacentHTML('beforeend', `<details><summary>التبويبات</summary><div class="tabs-editor-list">${tabs.map((tab, index) => `<fieldset class="inspector-group"><legend>تبويب ${index + 1}</legend>${field('الاسم', `tabs.${index}.label`, tab.label, 'text', `data-design-field="tabs.${index}.label" minlength="1" maxlength="40" required`)}${selectField('الانتقال', `tabs.${index}.transition`, tab.transition, [['fade', 'Fade'], ['slide', 'Slide'], ['blur', 'Blur']])}<label class="switch-field">ظاهر<input data-design-field="tabs.${index}.visible" type="checkbox" ${tab.visible !== false ? 'checked' : ''} /></label><button type="button" data-tab-remove="${tab.id}">حذف ${tab.label}</button></fieldset>`).join('')}<button type="button" data-tab-add ${tabs.length >= 5 ? 'disabled' : ''}>+ إضافة تبويب</button></div></details>`);
 }
 
 function renderCommunityControls() {
@@ -554,6 +838,8 @@ function renderThemeControls() {
 }
 
 function renderAll() {
+  const openSections = new Set([...designControls.querySelectorAll('details[open] summary')].map((summary) => summary.textContent));
+  const sidebarScroll = editorSidebar.scrollTop;
   renderPreview();
   renderLayers();
   renderDesignControls();
@@ -563,17 +849,28 @@ function renderAll() {
   renderTabsControls();
   renderCommunityControls();
   renderThemeControls();
+  designControls.querySelectorAll('details').forEach((details) => {
+    if (openSections.has(details.querySelector('summary')?.textContent)) details.open = true;
+  });
   renderInspector();
   undoButton.disabled = state.historyIndex === 0;
   redoButton.disabled = state.historyIndex >= state.history.length - 1;
   deleteButton.disabled = selected()?.type === 'profile-card' || !selected();
+  editorSidebar.scrollTop = sidebarScroll;
+  publishButton.textContent = currentPage.published ? 'إلغاء النشر' : 'نشر الصفحة';
+  publishButton.classList.toggle('is-published', currentPage.published);
+  publishStatus.textContent = currentPage.published ? ' · منشورة' : ' · مسودة';
 }
 
 function scheduleAutosave() {
   clearTimeout(autosaveTimer);
   saveStatus.textContent = 'بانتظار الحفظ';
   saveStatus.className = 'save-status is-saving';
-  autosaveTimer = setTimeout(saveConfiguration, 850);
+  saveStatus.removeAttribute('title');
+  autosaveTimer = setTimeout(() => {
+    autosaveTimer = null;
+    saveConfiguration();
+  }, 850);
 }
 
 async function saveConfiguration() {
@@ -583,6 +880,7 @@ async function saveConfiguration() {
     return;
   }
   saving = true;
+  saveButton.disabled = true;
   const snapshot = clone(state.configuration);
   saveStatus.textContent = 'جارٍ الحفظ';
   saveStatus.className = 'save-status is-saving';
@@ -591,16 +889,28 @@ async function saveConfiguration() {
     currentPage = { ...currentPage, ...data.page };
     saveStatus.textContent = 'محفوظ';
     saveStatus.className = 'save-status';
+    saveStatus.removeAttribute('title');
+    return true;
   } catch (error) {
     saveStatus.textContent = 'فشل الحفظ';
     saveStatus.className = 'save-status is-error';
+    saveStatus.title = error.message;
+    return false;
   } finally {
     saving = false;
+    saveButton.disabled = false;
+    saveWaiters.splice(0).forEach((resolve) => resolve());
     if (saveAgain || JSON.stringify(snapshot) !== JSON.stringify(state.configuration)) {
       saveAgain = false;
       scheduleAutosave();
     }
   }
+}
+
+function saveNow() {
+  clearTimeout(autosaveTimer);
+  autosaveTimer = null;
+  return saveConfiguration();
 }
 
 function commitChange() {
@@ -619,13 +929,27 @@ function openSettingsPanel() {
 
 function selectElement(id) {
   state.selectedId = id;
+  const element = selected();
+  if (element?.tabId) activeTabId = element.tabId;
   openSettingsPanel();
   renderAll();
 }
 
 function addElement(type) {
-  if (state.configuration.elements.length >= 30) return;
-  const tabId = state.configuration.tabs[0]?.id;
+  if (state.configuration.elements.length >= ELEMENT_LIMIT) {
+    saveStatus.textContent = `الحد ${ELEMENT_LIMIT} عنصرًا`;
+    saveStatus.className = 'save-status is-error';
+    return;
+  }
+  if (type === 'music') {
+    const existing = state.configuration.elements.find((element) => element.type === type);
+    if (existing) {
+      selectElement(existing.id);
+      saveStatus.textContent = 'المشغل موجود';
+      return;
+    }
+  }
+  const tabId = activeTabId || state.configuration.tabs[0]?.id;
   if (type === 'social-links') {
     if (!state.configuration.socialLinks.length) state.configuration.socialLinks.push({ id: EditorState.createId('link'), label: 'رابط جديد', url: 'https://example.com', icon: 'website', display: 'both', visible: true });
     EditorState.addElement(state, { type, size: { width: 48, height: 10 }, tabId });
@@ -636,6 +960,7 @@ function addElement(type) {
   } else if (type === 'sticker') {
     EditorState.addElement(state, { type, content: '✨', size: { width: 14, height: 16 }, tabId });
   } else if (type === 'music') {
+    state.configuration.musicPlayer.enabled = true;
     EditorState.addElement(state, { type, content: 'مشغل موسيقى', size: { width: 35, height: 11 }, tabId });
   }
   openSettingsPanel();
@@ -645,14 +970,14 @@ function addElement(type) {
 }
 
 function addSticker(name) {
-  if (state.configuration.elements.length >= 30) return;
+  if (state.configuration.elements.length >= ELEMENT_LIMIT) return;
   EditorState.addElement(state, {
     type: 'image',
     name: `Sticker: ${name}`,
     assetUrl: `/assets/stickers/${name}.svg`,
     size: { width: 14, height: 14 },
     style: { borderRadius: 0, shadow: 'none', glow: false, animation: 'none' },
-    tabId: state.configuration.tabs[0]?.id
+    tabId: activeTabId || state.configuration.tabs[0]?.id
   });
   openSettingsPanel();
   renderAll();
@@ -660,8 +985,8 @@ function addSticker(name) {
 }
 
 function addWidget(kind) {
-  if (state.configuration.elements.length >= 30 || state.configuration.elements.filter((item) => item.type === 'widget').length >= 6) return;
-  EditorState.addElement(state, { type: 'widget', widget: kind, widgetData: widgetDefault(kind), name: `Widget: ${kind}`, size: { width: 38, height: kind === 'gallery' ? 30 : 16 }, tabId: state.configuration.tabs[0]?.id });
+  if (state.configuration.elements.length >= ELEMENT_LIMIT || state.configuration.elements.filter((item) => item.type === 'widget').length >= 6) return;
+  EditorState.addElement(state, { type: 'widget', widget: kind, widgetData: widgetDefault(kind), name: `Widget: ${kind}`, size: { width: 38, height: kind === 'gallery' ? 30 : 16 }, tabId: activeTabId || state.configuration.tabs[0]?.id });
   openSettingsPanel();
   renderAll();
   scheduleAutosave();
@@ -672,14 +997,19 @@ function addTab() {
   const tab = { id: EditorState.createId('tab'), label: `Tab ${state.configuration.tabs.length + 1}`, transition: 'fade', visible: true };
   state.configuration.tabs.push(tab);
   state.configuration.elements.forEach((element) => { if (!element.tabId) element.tabId = tab.id; });
+  activeTabId = tab.id;
   commitChange();
 }
 
 function removeTab(id) {
-  if (state.configuration.tabs.length < 2) return;
   state.configuration.tabs = state.configuration.tabs.filter((tab) => tab.id !== id);
-  const fallback = state.configuration.tabs[0].id;
-  state.configuration.elements.forEach((element) => { if (element.tabId === id) element.tabId = fallback; });
+  const fallback = state.configuration.tabs[0]?.id;
+  if (activeTabId === id) activeTabId = fallback || null;
+  state.configuration.elements.forEach((element) => {
+    if (element.tabId !== id) return;
+    if (fallback) element.tabId = fallback;
+    else delete element.tabId;
+  });
   commitChange();
 }
 
@@ -695,17 +1025,45 @@ function setNested(target, path, value) {
 
 function inputValue(input) {
   if (input.type === 'checkbox') return input.checked;
-  if (input.type === 'number') return Number(input.value);
+  if (input.type === 'number') return input.value === '' ? null : Number(input.value);
   return input.value;
 }
 
-function applyInspectorChange(input) {
+function refreshPreviewElement(element) {
+  const node = preview.querySelector(`[data-id="${CSS.escape(element.id)}"]`);
+  if (!node) return;
+  const layout = responsive.resolveElementLayout(element, mobilePreviewActive());
+  const oldContent = node.querySelector(':scope > .editor-element-content');
+  const nextContent = contentShell(element, contentNode(element, layout));
+  if (oldContent) oldContent.replaceWith(nextContent);
+  else node.prepend(nextContent);
+  applyGeometry(node, element, layout);
+  applyContentScale(node, element, layout);
+}
+
+function refreshAffectedElements(key, element) {
+  let affected = [element];
+  if (key.startsWith('profileCard.') || key.startsWith('avatar.') || key.startsWith('banner.') || key.startsWith('typography.displayName') || key.startsWith('typography.bio')) {
+    affected = state.configuration.elements.filter((item) => item.type === 'profile-card');
+  } else if (key.startsWith('socialLinks.') || key.startsWith('typography.link')) {
+    affected = state.configuration.elements.filter((item) => item.type === 'social-links');
+  } else if (key.startsWith('musicPlayer.')) {
+    affected = state.configuration.elements.filter((item) => item.type === 'music');
+  }
+  affected.forEach(refreshPreviewElement);
+}
+
+function applyInspectorChange(input, record = true) {
   const element = selected();
   if (!element || !input.dataset.field) return;
   const key = input.dataset.field;
   let value = inputValue(input);
+  if (value === null || (typeof value === 'number' && !Number.isFinite(value)) || !input.checkValidity()) return;
+  const mobile = key.startsWith('mobileOverrides.');
+  const initialLayout = responsive.resolveElementLayout(element, mobile);
+  const initialFontSize = elementFontSize(element, mobile);
   if (key === 'widgetData.targetDate' && input.value) value = new Date(input.value).toISOString();
-  if (key.startsWith('profileCard.') || key.startsWith('musicPlayer.')) setNested(state.configuration, key, value);
+  if (key.startsWith('profileCard.') || key.startsWith('musicPlayer.') || key.startsWith('typography.')) setNested(state.configuration, key, value);
   else if (key.startsWith('avatar.') || key.startsWith('banner.')) {
     if (key.includes('.asset.') && !state.configuration[key.split('.')[0]].asset) return;
     setNested(state.configuration, key, value);
@@ -716,16 +1074,102 @@ function applyInspectorChange(input) {
       element.mobileOverrides ||= {};
       element.mobileOverrides.mobilePosition ||= clone(element.position);
     }
-    setNested(element, key, value);
+    if (key === 'name' && !String(value).trim()) delete element.name;
+    else setNested(element, key, value);
+    if (key === 'tabId') activeTabId = value;
+    const changesSize = key === 'size.width' || key === 'size.height' || key === 'mobileOverrides.mobileWidth' || key === 'mobileOverrides.mobileHeight';
+    if (changesSize && (element.type === 'text' || element.type === 'sticker')) {
+      const nextLayout = responsive.resolveElementLayout(element, mobile);
+      const fontSize = EditorState.resizedFontSize(initialFontSize, initialLayout.size, nextLayout.size);
+      if (mobile) element.mobileOverrides.fontSize = fontSize;
+      else element.style.fontSize = fontSize;
+    }
+  }
+  if (record) commitChange();
+  else refreshAffectedElements(key, element);
+}
+
+function applyPixelGeometryChange(input) {
+  const element = selected();
+  const rect = preview.getBoundingClientRect();
+  const pixels = Number(input.value);
+  if (!element || !input.dataset.pixelField || !Number.isFinite(pixels) || !input.checkValidity() || !rect.width || !rect.height) return;
+  const mobile = mobilePreviewActive() && element.mobileOverrides !== undefined;
+  const initialLayout = responsive.resolveElementLayout(element, mobile);
+  const initialFontSize = elementFontSize(element, mobile);
+  const scale = initialLayout.scale || 1;
+  const percentage = input.dataset.pixelField === 'width'
+    ? pixels / rect.width * 100 / scale
+    : pixels / rect.height * 100 / scale;
+  const nextSize = { ...initialLayout.size, [input.dataset.pixelField]: Math.max(1, Math.min(100, percentage)) };
+  if (mobile) {
+    element.mobileOverrides ||= {};
+    if (input.dataset.pixelField === 'width') element.mobileOverrides.mobileWidth = nextSize.width;
+    else element.mobileOverrides.mobileHeight = nextSize.height;
+  } else {
+    element.size = nextSize;
+  }
+  if (element.type === 'text' || element.type === 'sticker') {
+    const fontSize = EditorState.resizedFontSize(initialFontSize, initialLayout.size, nextSize);
+    if (mobile) element.mobileOverrides.fontSize = fontSize;
+    else element.style.fontSize = fontSize;
   }
   commitChange();
 }
 
+async function updatePageValue(input) {
+  const key = input.dataset.pageValue;
+  if (!key || !input.checkValidity()) return;
+  const value = input.value.trim();
+  if (key === 'displayName' && !value) return;
+  saveStatus.textContent = 'جارٍ الحفظ';
+  saveStatus.className = 'save-status is-saving';
+  try {
+    if (saving) await new Promise((resolve) => saveWaiters.push(resolve));
+    const configurationSaved = await saveNow();
+    if (configurationSaved === false) throw new Error('احفظ تعديلات التصميم قبل تحديث بيانات الصفحة.');
+    const data = await request('/api/pages/me', { method: 'PATCH', body: JSON.stringify({ [key]: value }) });
+    currentPage = { ...currentPage, ...data.page };
+    saveStatus.textContent = 'محفوظ';
+    saveStatus.className = 'save-status';
+  } catch (error) {
+    saveStatus.textContent = 'فشل الحفظ';
+    saveStatus.className = 'save-status is-error';
+    saveStatus.title = error.message;
+  }
+}
+
+async function togglePublish() {
+  publishButton.disabled = true;
+  try {
+    const saved = await saveNow();
+    if (saved === false) throw new Error('تعذر نشر تغييرات لم تُحفظ.');
+    const action = currentPage.published ? 'unpublish' : 'publish';
+    const data = await request(`/api/pages/me/${action}`, { method: 'POST', body: '{}' });
+    currentPage = { ...currentPage, ...data.page };
+    renderAll();
+    saveStatus.textContent = currentPage.published ? 'تم النشر' : 'عادت مسودة';
+    saveStatus.className = 'save-status';
+  } catch (error) {
+    saveStatus.textContent = error.message;
+    saveStatus.className = 'save-status is-error';
+  } finally {
+    publishButton.disabled = false;
+  }
+}
+
 function applyDesignChange(input) {
   const key = input.dataset.designField;
-  if (!key) return;
+  if (!key || !input.checkValidity()) return;
   if (key.startsWith('background.asset.') && !state.configuration.background.asset) return;
-  setNested(state.configuration, key, inputValue(input));
+  const value = inputValue(input);
+  if (value === null || (typeof value === 'number' && !Number.isFinite(value))) return;
+  setNested(state.configuration, key, value);
+  if (key === 'entranceScreen.enabled') entrancePreviewVisible = Boolean(value);
+  if (key === 'background.asset.position') {
+    const positions = { center: { x: 50, y: 50 }, top: { x: 50, y: 0 }, bottom: { x: 50, y: 100 }, left: { x: 0, y: 50 }, right: { x: 100, y: 50 } };
+    state.configuration.background.asset.crop = positions[value];
+  }
   commitChange();
 }
 
@@ -757,19 +1201,48 @@ async function applyBuiltInTheme(theme, mode) {
   }
 }
 
+function uploadForm(form, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/pages/assets');
+    xhr.timeout = 120000;
+    xhr.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable) onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+    });
+    xhr.addEventListener('load', () => {
+      const data = (() => { try { return JSON.parse(xhr.responseText || '{}'); } catch { return {}; } })();
+      if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+      else reject(new Error(data.error || 'تعذر رفع الملف.'));
+    });
+    xhr.addEventListener('error', () => reject(new Error('انقطع الاتصال أثناء رفع الملف.')));
+    xhr.addEventListener('timeout', () => reject(new Error('استغرق رفع الملف وقتًا طويلًا. حاول مرة أخرى.')));
+    xhr.send(form);
+  });
+}
+
 async function uploadAsset(input) {
   const file = input.files?.[0];
   const purpose = input.dataset.upload;
   if (!file || !purpose) return;
-  saveStatus.textContent = 'جارٍ الرفع';
+  const mediaKind = file.type === 'image/gif' ? 'gif' : (file.type.startsWith('image/') ? 'image' : (file.type.startsWith('video/') ? 'video' : 'audio'));
+  if (file.size > UPLOAD_LIMITS[mediaKind]) {
+    saveStatus.textContent = 'الملف أكبر من الحد';
+    saveStatus.className = 'save-status is-error';
+    input.value = '';
+    return;
+  }
+  const targetId = state.selectedId;
+  const widgetIndex = Number(input.dataset.widgetIndex);
+  input.disabled = true;
+  saveStatus.textContent = 'رفع 0%';
   saveStatus.className = 'save-status is-saving';
   const form = new FormData();
   form.append('asset', file);
   form.append('purpose', purpose === 'image' ? 'image' : purpose);
   try {
-    const response = await fetch('/api/pages/assets', { method: 'POST', credentials: 'same-origin', body: form });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || 'تعذر رفع الملف.');
+    const data = await uploadForm(form, (percentage) => {
+      saveStatus.textContent = percentage === 100 ? 'جارٍ المعالجة' : `رفع ${percentage}%`;
+    });
     if (purpose === 'background') {
       state.configuration.background.asset = data.asset;
       state.configuration.background.type = data.mediaType;
@@ -779,7 +1252,7 @@ async function uploadAsset(input) {
       state.configuration.banner.asset = data.asset;
       state.configuration.banner.visible = true;
     } else if (purpose === 'image') {
-      const element = selected();
+      const element = state.configuration.elements.find((item) => item.id === targetId);
       if (element?.type === 'image') element.assetUrl = data.asset.url;
     } else if (purpose === 'music-audio') {
       state.configuration.musicPlayer.audioUrl = data.asset.url;
@@ -792,15 +1265,33 @@ async function uploadAsset(input) {
       state.configuration.cursor.image = data.asset;
       state.configuration.cursor.type = 'image';
     } else if (purpose === 'widget-image') {
-      const element = selected();
-      const index = Number(input.dataset.widgetIndex);
-      if (element?.type === 'widget' && Number.isInteger(index) && element.widgetData.items?.[index]) element.widgetData.items[index].image = data.asset;
+      const element = state.configuration.elements.find((item) => item.id === targetId);
+      if (element?.type === 'widget' && Number.isInteger(widgetIndex) && element.widgetData.items?.[widgetIndex]) element.widgetData.items[widgetIndex].image = data.asset;
     }
     commitChange();
   } catch (error) {
     saveStatus.textContent = error.message;
     saveStatus.className = 'save-status is-error';
+  } finally {
+    input.disabled = false;
+    input.value = '';
   }
+}
+
+function removeConfiguredAsset(action) {
+  if (action === 'remove-audio') state.configuration.musicPlayer.audioUrl = null;
+  else if (action === 'remove-cover') state.configuration.musicPlayer.cover = null;
+  else if (action === 'remove-background') {
+    delete state.configuration.background.asset;
+    state.configuration.background.type = 'solid';
+  }
+  else if (action === 'remove-entrance-background') state.configuration.entranceScreen.background = null;
+  else if (action === 'remove-cursor-image') {
+    state.configuration.cursor.image = null;
+    state.configuration.cursor.type = 'default';
+  } else return false;
+  commitChange();
+  return true;
 }
 
 function deleteSelected() {
@@ -812,6 +1303,11 @@ function deleteSelected() {
 }
 
 function duplicateSelected() {
+  if (state.configuration.elements.length >= ELEMENT_LIMIT || selected()?.type === 'music') {
+    saveStatus.textContent = selected()?.type === 'music' ? 'يوجد مشغل واحد فقط' : `الحد ${ELEMENT_LIMIT} عنصرًا`;
+    saveStatus.className = 'save-status is-error';
+    return;
+  }
   const before = state.historyIndex;
   EditorState.duplicateSelected(state);
   if (state.historyIndex === before) return;
@@ -827,20 +1323,24 @@ function onPointerDown(event) {
   event.preventDefault();
   if (state.selectedId !== element.id) selectElement(element.id);
   const rect = preview.getBoundingClientRect();
-  const layout = responsive.resolveElementLayout(element, mobilePreviewActive());
+  const mobile = mobilePreviewActive();
+  const layout = responsive.resolveElementLayout(element, mobile);
+  const resizeHandle = event.target.closest('[data-resize-handle]')?.dataset.resizeHandle;
   pointerAction = {
     id: element.id,
-    mode: event.target.closest('.resize-handle') ? 'resize' : 'drag',
+    mode: resizeHandle ? 'resize' : 'drag',
+    handle: resizeHandle,
     startX: event.clientX,
     startY: event.clientY,
     width: rect.width,
     height: rect.height,
-    position: clone(layout.position),
-    size: clone(layout.size),
+    layout: { position: clone(layout.position), size: clone(layout.size) },
+    fontSize: elementFontSize(element, mobile),
+    mobile,
     changed: false
   };
   preview.setPointerCapture(event.pointerId);
-  elementNode.classList.add('is-dragging');
+  preview.querySelector(`[data-id="${element.id}"]`)?.classList.add('is-dragging');
 }
 
 function onPointerMove(event) {
@@ -849,32 +1349,46 @@ function onPointerMove(event) {
   if (!element) return;
   const deltaX = ((event.clientX - pointerAction.startX) / pointerAction.width) * 100;
   const deltaY = ((event.clientY - pointerAction.startY) / pointerAction.height) * 100;
-  const mobile = mobilePreviewActive();
+  const mobile = pointerAction.mobile;
+  let nextLayout;
   if (pointerAction.mode === 'drag') {
-    const x = Math.max(0, Math.min(100, pointerAction.position.x + deltaX));
-    const y = Math.max(0, Math.min(100, pointerAction.position.y + deltaY));
+    const scale = responsive.resolveElementLayout(element, mobile).scale || 1;
+    nextLayout = EditorState.moveLayout(pointerAction.layout, { x: deltaX, y: deltaY }, {}, scale);
     if (mobile) {
       element.mobileOverrides ||= {};
-      element.mobileOverrides.mobilePosition = { x, y };
+      element.mobileOverrides.mobilePosition = nextLayout.position;
     } else {
-      element.position.x = x;
-      element.position.y = y;
+      element.position = nextLayout.position;
     }
   } else {
-    const width = Math.max(1, Math.min(100, pointerAction.size.width + deltaX));
-    const height = Math.max(1, Math.min(100, pointerAction.size.height + deltaY));
+    const rect = preview.getBoundingClientRect();
+    const scale = responsive.resolveElementLayout(element, mobile).scale || 1;
+    nextLayout = EditorState.resizeLayoutByDelta(pointerAction.layout, { x: deltaX, y: deltaY }, pointerAction.handle, {
+      width: Math.max(1, (24 / rect.width) * 100),
+      height: Math.max(1, (24 / rect.height) * 100)
+    }, scale);
     if (mobile) {
       element.mobileOverrides ||= {};
-      element.mobileOverrides.mobileWidth = width;
-      element.mobileOverrides.mobileHeight = height;
+      element.mobileOverrides.mobilePosition = nextLayout.position;
+      element.mobileOverrides.mobileWidth = nextLayout.size.width;
+      element.mobileOverrides.mobileHeight = nextLayout.size.height;
     } else {
-      element.size.width = width;
-      element.size.height = height;
+      element.position = nextLayout.position;
+      element.size = nextLayout.size;
+    }
+    if (element.type === 'text' || element.type === 'sticker') {
+      const fontSize = EditorState.resizedFontSize(pointerAction.fontSize, pointerAction.layout.size, nextLayout.size);
+      if (mobile) element.mobileOverrides.fontSize = fontSize;
+      else element.style.fontSize = fontSize;
     }
   }
   pointerAction.changed = true;
   const node = preview.querySelector(`[data-id="${pointerAction.id}"]`);
-  if (node) applyGeometry(node, element, responsive.resolveElementLayout(element, mobile));
+  if (node) {
+    const layout = responsive.resolveElementLayout(element, mobile);
+    applyGeometry(node, element, layout);
+    applyContentScale(node, element, layout);
+  }
 }
 
 function onPointerUp(event) {
@@ -885,9 +1399,53 @@ function onPointerUp(event) {
   preview.querySelector(`[data-id="${action.id}"]`)?.classList.remove('is-dragging');
   if (!action.changed) return;
   EditorState.pushHistory(state);
-  renderLayers();
-  renderInspector();
+  renderAll();
   scheduleAutosave();
+}
+
+let keyboardCommitTimer = null;
+
+function finishKeyboardChange() {
+  if (!keyboardCommitTimer) return;
+  clearTimeout(keyboardCommitTimer);
+  keyboardCommitTimer = null;
+  EditorState.pushHistory(state);
+  renderAll();
+  scheduleAutosave();
+}
+
+function nudgeSelected(deltaX, deltaY) {
+  const element = selected();
+  if (!element) return;
+  const mobile = mobilePreviewActive();
+  const layout = responsive.resolveElementLayout(element, mobile);
+  const next = EditorState.moveLayout(layout, { x: deltaX, y: deltaY }, {}, layout.scale);
+  if (next.position.x === layout.position.x && next.position.y === layout.position.y) return;
+  if (mobile) {
+    element.mobileOverrides ||= {};
+    element.mobileOverrides.mobilePosition = next.position;
+  } else {
+    element.position = next.position;
+  }
+  const node = preview.querySelector(`[data-id="${element.id}"]`);
+  if (node) applyGeometry(node, element, responsive.resolveElementLayout(element, mobile));
+  renderInspector();
+  clearTimeout(keyboardCommitTimer);
+  keyboardCommitTimer = setTimeout(finishKeyboardChange, 180);
+}
+
+function isEditingField(target) {
+  return target instanceof Element && Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
+}
+
+function setPreviewMode(mode) {
+  const mobile = mode === 'mobile';
+  editorApp.dataset.preview = mode;
+  preview.dataset.mode = mode;
+  previewLabel.textContent = mobile ? 'معاينة الجوال' : 'معاينة سطح المكتب';
+  desktopPreviewButton.classList.toggle('is-active', !mobile);
+  mobilePreviewButton.classList.toggle('is-active', mobile);
+  if (state) renderAll();
 }
 
 let draggedLayerId = null;
@@ -956,7 +1514,19 @@ layersList.addEventListener('drop', (event) => {
 });
 inspector.addEventListener('change', (event) => {
   if (event.target.dataset.upload) return uploadAsset(event.target);
+  if (event.target.dataset.pageValue) return updatePageValue(event.target);
+  if (event.target.dataset.pixelField) return applyPixelGeometryChange(event.target);
   return applyInspectorChange(event.target);
+});
+inspector.addEventListener('input', (event) => {
+  const input = event.target;
+  if (input.dataset.pageValue) {
+    currentPage[input.dataset.pageValue] = input.value;
+    state.configuration.elements.filter((element) => element.type === 'profile-card').forEach(refreshPreviewElement);
+    return;
+  }
+  if (!input.dataset.field || !['text', 'url', 'color'].includes(input.type) && input.tagName !== 'TEXTAREA') return;
+  applyInspectorChange(input, false);
 });
 designControls.addEventListener('change', (event) => {
   if (event.target.dataset.upload) return uploadAsset(event.target);
@@ -964,6 +1534,13 @@ designControls.addEventListener('change', (event) => {
   return applyDesignChange(event.target);
 });
 designControls.addEventListener('click', (event) => {
+  const mediaAction = event.target.closest('[data-music-action], [data-experience-action], [data-background-action]');
+  if (mediaAction?.dataset.experienceAction === 'preview-entrance') {
+    entrancePreviewVisible = true;
+    renderPreview();
+    return;
+  }
+  if (mediaAction && removeConfiguredAsset(mediaAction.dataset.musicAction || mediaAction.dataset.experienceAction || mediaAction.dataset.backgroundAction)) return;
   const sticker = event.target.closest('[data-sticker]');
   if (sticker) addSticker(sticker.dataset.sticker);
   const widget = event.target.closest('[data-widget-add]');
@@ -983,6 +1560,14 @@ designControls.addEventListener('click', (event) => {
   if (remove) removeTab(remove.dataset.tabRemove);
 });
 inspector.addEventListener('click', (event) => {
+  const mode = event.target.closest('[data-inspector-mode]');
+  if (mode) {
+    inspectorMode = mode.dataset.inspectorMode;
+    renderInspector();
+    return;
+  }
+  const musicAction = event.target.closest('[data-music-action]');
+  if (musicAction && removeConfiguredAsset(musicAction.dataset.musicAction)) return;
   const socialAction = event.target.closest('[data-social-action]');
   if (socialAction) {
     if (socialAction.dataset.socialAction === 'add' && state.configuration.socialLinks.length < 12) {
@@ -1009,38 +1594,101 @@ inspector.addEventListener('click', (event) => {
   const element = selected();
   if (!widgetAction || element?.type !== 'widget') return;
   const data = element.widgetData;
+  const widgetIndex = Number(event.target.closest('[data-widget-index]')?.dataset.widgetIndex);
   if (widgetAction === 'item' && (data.kind === 'characters' || data.kind === 'games') && data.items.length < 6) data.items.push({ id: EditorState.createId('item'), name: 'عنصر جديد', image: { url: 'https://celes.lol/assets/logo.png', position: 'center', fit: 'cover' } });
   if (widgetAction === 'item' && data.kind === 'gallery' && data.items.length < 12) data.items.push({ id: EditorState.createId('item'), image: { url: 'https://celes.lol/assets/logo.png', position: 'center', fit: 'cover' }, caption: '' });
   if (widgetAction === 'option' && data.kind === 'poll' && data.options.length < 4) data.options.push({ id: EditorState.createId('option'), label: 'خيار جديد' });
+  if (widgetAction === 'remove-item' && Number.isInteger(widgetIndex) && Array.isArray(data.items) && data.items.length > 1) data.items.splice(widgetIndex, 1);
+  if (widgetAction === 'remove-option' && Number.isInteger(widgetIndex) && data.kind === 'poll' && data.options.length > 2) data.options.splice(widgetIndex, 1);
   commitChange();
 });
 deleteButton.addEventListener('click', deleteSelected);
+saveButton.addEventListener('click', saveNow);
+publishButton.addEventListener('click', togglePublish);
 undoButton.addEventListener('click', () => { if (EditorState.undo(state)) { renderAll(); scheduleAutosave(); } });
 redoButton.addEventListener('click', () => { if (EditorState.redo(state)) { renderAll(); scheduleAutosave(); } });
 preview.addEventListener('pointerdown', onPointerDown);
 preview.addEventListener('pointermove', onPointerMove);
 preview.addEventListener('pointerup', onPointerUp);
 preview.addEventListener('pointercancel', onPointerUp);
-desktopPreviewButton.addEventListener('click', () => {
-  editorApp.dataset.preview = 'desktop';
-  preview.dataset.mode = 'desktop';
-  previewLabel.textContent = 'معاينة سطح المكتب';
-  desktopPreviewButton.classList.add('is-active');
-  mobilePreviewButton.classList.remove('is-active');
+preview.addEventListener('click', (event) => {
+  if (event.target.closest('[data-dismiss-entrance-preview]')) {
+    entrancePreviewVisible = false;
+    renderPreview();
+    return;
+  }
+  const tab = event.target.closest('[data-preview-tab]');
+  if (!tab) return;
+  activeTabId = tab.dataset.previewTab;
+  const element = selected();
+  if (element?.tabId && element.tabId !== activeTabId) state.selectedId = state.configuration.elements.find((item) => item.tabId === activeTabId)?.id || null;
   renderAll();
 });
-mobilePreviewButton.addEventListener('click', () => {
-  editorApp.dataset.preview = 'mobile';
-  preview.dataset.mode = 'mobile';
-  previewLabel.textContent = 'معاينة الجوال';
-  mobilePreviewButton.classList.add('is-active');
-  desktopPreviewButton.classList.remove('is-active');
-  renderAll();
+preview.addEventListener('focusin', (event) => {
+  const element = event.target.closest('.editor-element');
+  if (element && state.selectedId !== element.dataset.id) selectElement(element.dataset.id);
 });
+desktopPreviewButton.addEventListener('click', () => setPreviewMode('desktop'));
+mobilePreviewButton.addEventListener('click', () => setPreviewMode('mobile'));
 document.querySelectorAll('[data-panel-tab]').forEach((button) => button.addEventListener('click', () => {
   editorApp.dataset.panel = button.dataset.panelTab;
   document.querySelectorAll('[data-panel-tab]').forEach((item) => item.classList.toggle('is-active', item === button));
 }));
+if ('ResizeObserver' in window) {
+  new ResizeObserver(() => {
+    if (!state || pointerAction) return;
+    state.configuration.elements.forEach((element) => {
+      const node = preview.querySelector(`[data-id="${element.id}"]`);
+      if (node) applyGeometry(node, element, responsive.resolveElementLayout(element, mobilePreviewActive()));
+    });
+  }).observe(preview);
+}
+document.addEventListener('keydown', (event) => {
+  if (!state || isEditingField(event.target)) return;
+  const command = event.ctrlKey || event.metaKey;
+  if (command && event.key.toLowerCase() === 's') {
+    event.preventDefault();
+    finishKeyboardChange();
+    saveNow();
+    return;
+  }
+  if (command && event.key.toLowerCase() === 'z') {
+    event.preventDefault();
+    finishKeyboardChange();
+    const changed = event.shiftKey ? EditorState.redo(state) : EditorState.undo(state);
+    if (changed) { renderAll(); scheduleAutosave(); }
+    return;
+  }
+  if (command && event.key.toLowerCase() === 'y') {
+    event.preventDefault();
+    finishKeyboardChange();
+    if (EditorState.redo(state)) { renderAll(); scheduleAutosave(); }
+    return;
+  }
+  if (command && event.key.toLowerCase() === 'd') {
+    event.preventDefault();
+    finishKeyboardChange();
+    duplicateSelected();
+    return;
+  }
+  if (event.key === 'Delete' || event.key === 'Backspace') {
+    event.preventDefault();
+    finishKeyboardChange();
+    deleteSelected();
+    return;
+  }
+  const step = event.shiftKey ? 2 : .5;
+  const directions = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+  if (directions[event.key]) {
+    event.preventDefault();
+    nudgeSelected(...directions[event.key]);
+  }
+});
+window.addEventListener('beforeunload', (event) => {
+  if (!autosaveTimer && !saving) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
 
 async function initializeEditor() {
   const auth = await request('/auth/me');
@@ -1060,7 +1708,8 @@ async function initializeEditor() {
   publicLink.href = `/${currentPage.slug}`;
   publicLink.textContent = `celes.lol/${currentPage.slug}`;
   workspace.hidden = false;
-  renderAll();
+  if (window.matchMedia('(max-width: 800px)').matches) setPreviewMode('mobile');
+  else renderAll();
   if (profileWasAdded) scheduleAutosave();
 }
 

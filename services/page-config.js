@@ -125,7 +125,7 @@ const mobileOverridesSchema = z.object({
   position: positionSchema.optional(),
   size: sizeSchema.optional(),
   visible: z.boolean().optional(),
-  fontSize: z.number().finite().min(10).max(80).optional()
+  fontSize: z.number().finite().min(10).max(96).optional()
 }).strict();
 
 const elementStyleSchema = z.object({
@@ -141,6 +141,8 @@ const elementStyleSchema = z.object({
   letterSpacing: z.number().finite().min(-2).max(16).optional(),
   lineHeight: z.number().finite().min(0.8).max(3).optional(),
   effect: z.enum(['none', 'gradient', 'glow', 'shimmer', 'typewriter', 'wave']).optional(),
+  objectFit: z.enum(['cover', 'contain']).optional(),
+  objectPosition: z.enum(['center', 'top', 'bottom', 'left', 'right']).optional(),
   flipX: z.boolean().optional(),
   shadow: z.enum(['none', 'soft', 'strong']).optional(),
   glow: z.boolean().optional(),

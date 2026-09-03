@@ -25,8 +25,10 @@
           <button type="button" data-add="music">+ موسيقى</button>
         </div>
         <div class="toolbar-group editor-actions">
-          <button id="editor-undo" type="button" title="تراجع">↶</button>
-          <button id="editor-redo" type="button" title="إعادة">↷</button>
+          <button id="editor-undo" type="button" title="تراجع (Ctrl+Z)" aria-label="تراجع" aria-keyshortcuts="Control+Z Meta+Z">↶</button>
+          <button id="editor-redo" type="button" title="إعادة (Ctrl+Shift+Z)" aria-label="إعادة" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z">↷</button>
+          <button id="editor-save" type="button" title="حفظ الآن (Ctrl+S)" aria-label="حفظ الآن" aria-keyshortcuts="Control+S Meta+S">حفظ</button>
+          <button id="editor-publish" type="button">نشر الصفحة</button>
           <button id="preview-desktop" type="button" class="is-active">سطح المكتب</button>
           <button id="preview-mobile" type="button">جوال</button>
           <span id="save-status" class="save-status">محفوظ</span>
@@ -59,7 +61,7 @@
         </aside>
 
         <section class="editor-stage">
-          <div class="editor-stage-heading"><span id="preview-label">معاينة سطح المكتب</span><a id="editor-public-link" target="_blank" rel="noopener"></a></div>
+          <div class="editor-stage-heading"><span><b id="preview-label">معاينة سطح المكتب</b><small id="page-publish-status"></small></span><a id="editor-public-link" target="_blank" rel="noopener"></a></div>
           <div class="preview-frame"><div id="page-preview" class="page-preview" data-mode="desktop"></div></div>
         </section>
       </section>

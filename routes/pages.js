@@ -35,6 +35,17 @@ const { storePageAsset } = require('../services/page-storage');
 const router = express.Router();
 const uploadDirectory = path.join(os.tmpdir(), 'celestia-pages-upload');
 const REACTION_PRESETS = new Set(['❤️', '⭐', '🎀', '🔥']);
+const ASSET_PURPOSES = Object.freeze({
+  background: new Set(['image', 'video']),
+  avatar: new Set(['image']),
+  banner: new Set(['image']),
+  image: new Set(['image']),
+  'music-audio': new Set(['audio']),
+  'music-cover': new Set(['image']),
+  'entrance-background': new Set(['image']),
+  'cursor-image': new Set(['image']),
+  'widget-image': new Set(['image'])
+});
 const guestbookRate = new Map();
 const mutationRate = new Map();
 const upload = multer({
@@ -214,12 +225,13 @@ router.post('/assets', requireUser, requireMutationRate(PAGE_RATE_LIMITS.asset.m
   const file = req.file;
   try {
     if (!file || !PAGE_ASSET_TYPES[file.mimetype]) return res.status(400).json({ error: 'Upload a supported image, GIF, video, or audio file.' });
+    const purpose = req.body?.purpose;
+    const mediaKind = file.mimetype.startsWith('image/') ? 'image' : (file.mimetype.startsWith('video/') ? 'video' : 'audio');
+    if (!Object.hasOwn(ASSET_PURPOSES, purpose) || !ASSET_PURPOSES[purpose].has(mediaKind)) return res.status(400).json({ error: 'This file type cannot be used for the selected Pages asset.' });
     if (file.mimetype.startsWith('image/') && file.size > PAGE_UPLOAD_LIMITS.imageBytes) return res.status(400).json({ error: 'Images must be 8MB or smaller.' });
     if (file.mimetype === 'image/gif' && file.size > PAGE_UPLOAD_LIMITS.gifBytes) return res.status(400).json({ error: 'GIF files must be 4MB or smaller.' });
     if (file.mimetype.startsWith('video/') && file.size > PAGE_UPLOAD_LIMITS.videoBytes) return res.status(400).json({ error: 'Videos must be 25MB or smaller.' });
     if (file.mimetype.startsWith('audio/') && file.size > PAGE_UPLOAD_LIMITS.audioBytes) return res.status(400).json({ error: 'Audio files must be 15MB or smaller.' });
-    if (req.body?.purpose !== 'background' && file.mimetype.startsWith('video/')) return res.status(400).json({ error: 'Video uploads can only be used as page backgrounds.' });
-    if (req.body?.purpose !== 'music-audio' && file.mimetype.startsWith('audio/')) return res.status(400).json({ error: 'Audio uploads can only be used by the music player.' });
     if (!await hasExpectedSignature(file)) return res.status(400).json({ error: 'The uploaded file does not match its declared media type.' });
 
     const url = await storePageAsset({

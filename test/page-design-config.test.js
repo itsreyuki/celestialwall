@@ -36,6 +36,15 @@ test('design configuration accepts background media, avatar, banner, and typogra
     visible: true,
     style: { fontFamily: 'Cairo', fontSize: 26, fontWeight: '700', color: '#fff7dc', textAlign: 'center', letterSpacing: 1, lineHeight: 1.4, effect: 'glow' },
     content: 'أهلاً بك'
+  }, {
+    id: 'portrait-image',
+    type: 'image',
+    position: { x: 75, y: 55 },
+    size: { width: 22, height: 30 },
+    zIndex: 5,
+    visible: true,
+    style: { objectFit: 'contain', objectPosition: 'top', borderRadius: 18 },
+    assetUrl: 'https://cdn.example.com/portrait.webp'
   });
 
   assert.equal(validatePageConfiguration(configuration).success, true);
