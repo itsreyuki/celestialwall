@@ -16,7 +16,7 @@ test('design configuration accepts background media, avatar, banner, and typogra
     vignette: 0.25,
     grain: 0.08
   };
-  configuration.avatar.asset = { url: 'https://cdn.example.com/avatar.webp', position: 'center', fit: 'cover', crop: { x: 45, y: 40 } };
+  configuration.avatar.asset = { url: 'https://cdn.example.com/avatar.webp', position: 'center', fit: 'cover', crop: { x: 45, y: 40 }, zoom: 2.25 };
   configuration.banner = { asset: { url: 'https://cdn.example.com/banner.gif', position: 'top', fit: 'cover', crop: { x: 50, y: 25 } }, borderRadius: 18, visible: true };
   configuration.musicPlayer = {
     enabled: true,
@@ -47,7 +47,15 @@ test('design configuration accepts background media, avatar, banner, and typogra
     assetUrl: 'https://cdn.example.com/portrait.webp'
   });
 
-  assert.equal(validatePageConfiguration(configuration).success, true);
+  const parsed = validatePageConfiguration(configuration);
+  assert.equal(parsed.success, true);
+  assert.equal(parsed.data.avatar.asset.zoom, 2.25);
+});
+
+test('avatar crop zoom remains within safe bounds', () => {
+  const configuration = createDefaultPageConfiguration();
+  configuration.avatar.asset = { url: 'https://cdn.example.com/avatar.webp', position: 'center', fit: 'cover', crop: { x: 50, y: 50 }, zoom: 5 };
+  assert.equal(validatePageConfiguration(configuration).success, false);
 });
 
 test('design configuration rejects unsafe media URLs', () => {

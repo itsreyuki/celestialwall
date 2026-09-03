@@ -9,6 +9,7 @@ let renderedMobile = null;
 
 function text(value) { return document.createTextNode(value || ''); }
 function assetPosition(asset) { return asset?.crop ? `${asset.crop.x}% ${asset.crop.y}%` : (asset?.position || 'center'); }
+function assetTransformOrigin(asset) { return asset?.crop ? `${asset.crop.x}% ${asset.crop.y}%` : 'center'; }
 function mobileViewport() { return window.matchMedia('(max-width: 700px)').matches; }
 function geometry(node, element) {
   const layout = window.CelestiaPageResponsive.resolveElementLayout(element, mobileViewport());
@@ -65,7 +66,7 @@ function profileCard(page, configuration, element) {
   const banner = configuration.banner;
   if (banner.visible && banner.asset?.url) { const bannerNode = document.createElement('div'); bannerNode.className = 'public-banner'; bannerNode.style.borderRadius = `${banner.borderRadius}px`; bannerNode.append(mediaElement(banner.asset)); card.append(bannerNode); }
   const avatarConfig = configuration.avatar; const avatar = document.createElement('div'); avatar.className = 'public-avatar'; avatar.style.width = `${Math.round(avatarConfig.size * scale)}px`; avatar.style.height = `${Math.round(avatarConfig.size * scale)}px`; avatar.style.borderRadius = avatarConfig.shape === 'circle' ? '50%' : (avatarConfig.shape === 'rounded-square' ? '22%' : '0'); avatar.style.borderColor = avatarConfig.borderColor; avatar.style.borderWidth = `${avatarConfig.borderWidth}px`; avatar.style.boxShadow = avatarConfig.shadow === 'strong' ? '0 12px 26px rgba(0,0,0,.48)' : (avatarConfig.shadow === 'soft' ? '0 7px 18px rgba(0,0,0,.3)' : 'none'); if (avatarConfig.glow) avatar.style.boxShadow += ', 0 0 20px rgba(241,199,94,.42)';
-  if (avatarConfig.asset?.url) avatar.append(mediaElement(avatarConfig.asset)); else avatar.append(text((page.displayName || '?').trim().charAt(0).toUpperCase() || '?'));
+  if (avatarConfig.asset?.url) { const avatarImage = mediaElement(avatarConfig.asset); avatarImage.style.transform = `scale(${avatarConfig.asset.zoom || 1})`; avatarImage.style.transformOrigin = assetTransformOrigin(avatarConfig.asset); avatar.append(avatarImage); } else avatar.append(text((page.displayName || '?').trim().charAt(0).toUpperCase() || '?'));
   const name = document.createElement('h1'); name.textContent = page.displayName; applyTextStyle(name, configuration.typography.displayName, scale); const bio = document.createElement('p'); bio.className = 'public-bio'; bio.textContent = page.bio; applyTextStyle(bio, configuration.typography.bio, scale); card.append(avatar, name, bio); return card;
 }
 function textElement(element) {

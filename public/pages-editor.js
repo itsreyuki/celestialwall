@@ -28,6 +28,7 @@ let saving = false;
 let saveAgain = false;
 let saveWaiters = [];
 let pointerAction = null;
+let avatarCropAction = null;
 let activeTabId = null;
 let entrancePreviewVisible = true;
 let inspectorMode = 'content';
@@ -121,6 +122,10 @@ function applyGeometry(elementNode, element, layout = responsive.resolveElementL
 function assetPosition(asset) {
   if (asset?.crop) return `${asset.crop.x}% ${asset.crop.y}%`;
   return asset?.position || 'center';
+}
+
+function assetTransformOrigin(asset) {
+  return asset?.crop ? `${asset.crop.x}% ${asset.crop.y}%` : 'center';
 }
 
 function renderBackground() {
@@ -301,10 +306,12 @@ function profileCardNode(element, scale = 1) {
   const asset = state.configuration.avatar.asset;
   if (asset?.url) {
     const image = document.createElement('img');
-    image.src = asset.url;
-    image.alt = '';
-    image.style.objectPosition = assetPosition(asset);
-    avatar.append(image);
+      image.src = asset.url;
+      image.alt = '';
+      image.style.objectPosition = assetPosition(asset);
+      image.style.transform = `scale(${asset.zoom || 1})`;
+      image.style.transformOrigin = assetTransformOrigin(asset);
+      avatar.append(image);
   } else {
     avatar.textContent = (currentPage.displayName || '?').trim().charAt(0).toUpperCase() || '?';
   }
@@ -651,6 +658,10 @@ function pixelField(label, axis, value) {
   return `<label>${label}<input data-pixel-field="${axis}" type="number" value="${value}" min="24" max="4000" step="1" inputmode="numeric" /></label>`;
 }
 
+function rangeField(label, key, value, minimum, maximum, step = 1, suffix = '') {
+  return `<label class="range-field"><span>${label}<output>${value}${suffix}</output></span><input data-field="${key}" type="range" value="${value}" min="${minimum}" max="${maximum}" step="${step}" /></label>`;
+}
+
 function renderDesignControls() {
   const background = state.configuration.background;
   const gradient = background.gradient || { from: '#100d1d', to: '#42266f', angle: 135 };
@@ -671,7 +682,10 @@ function profileInspectorFields() {
   const banner = state.configuration.banner;
   const identity = `<fieldset class="inspector-group"><legend>المحتوى</legend><label>اسم العرض<input data-page-value="displayName" value="${escapeHtml(currentPage.displayName || '')}" minlength="1" maxlength="120" required /></label><label>النبذة<textarea data-page-value="bio" maxlength="500" rows="4">${escapeHtml(currentPage.bio || '')}</textarea></label></fieldset>`;
   const card = `<fieldset class="inspector-group"><legend>البطاقة</legend>${field('لون البطاقة', 'profileCard.backgroundColor', profile.backgroundColor)}${field('شفافية البطاقة', 'profileCard.opacity', profile.opacity, 'number', 'min="0" max="1" step="0.05"')}${field('Blur البطاقة', 'profileCard.blur', profile.blur, 'number', 'min="0" max="32"')}${field('لون الإطار', 'profileCard.borderColor', profile.borderColor)}${field('سمك الإطار', 'profileCard.borderWidth', profile.borderWidth, 'number', 'min="0" max="8"')}${field('استدارة الحواف', 'profileCard.borderRadius', profile.borderRadius, 'number', 'min="0" max="64"')}${field('المساحة الداخلية', 'profileCard.padding', profile.padding, 'number', 'min="12" max="80"')}<label class="switch-field">Glass<input data-field="profileCard.glass" type="checkbox" ${profile.glass ? 'checked' : ''} /></label><label class="switch-field">Glow<input data-field="profileCard.glow" type="checkbox" ${profile.glow ? 'checked' : ''} /></label>${selectField('الظل', 'profileCard.shadow', profile.shadow, [['none', 'بدون'], ['soft', 'خفيف'], ['strong', 'قوي']], 'data-field')}${selectField('المحاذاة', 'profileCard.alignment', profile.alignment, [['left', 'يسار'], ['center', 'وسط'], ['right', 'يمين']], 'data-field')}</fieldset>`;
-  const avatarFields = `<fieldset class="inspector-group"><legend>الصورة الشخصية</legend><label class="upload-field">رفع الصورة الشخصية<input data-upload="avatar" type="file" accept="image/jpeg,image/png,image/webp,image/gif" /></label>${field('حجم الصورة', 'avatar.size', avatar.size, 'number', 'min="48" max="240"')}${selectField('الشكل', 'avatar.shape', avatar.shape, [['circle', 'دائري'], ['rounded-square', 'مربع دائري'], ['square', 'مربع']], 'data-field')}${field('لون الإطار', 'avatar.borderColor', avatar.borderColor)}${field('سمك الإطار', 'avatar.borderWidth', avatar.borderWidth, 'number', 'min="0" max="8"')}${field('موضع القص أفقيًا', 'avatar.asset.crop.x', avatar.asset?.crop?.x ?? 50, 'number', 'min="0" max="100"')}${field('موضع القص عموديًا', 'avatar.asset.crop.y', avatar.asset?.crop?.y ?? 50, 'number', 'min="0" max="100"')}<label class="switch-field">Glow<input data-field="avatar.glow" type="checkbox" ${avatar.glow ? 'checked' : ''} /></label>${selectField('الظل', 'avatar.shadow', avatar.shadow, [['none', 'بدون'], ['soft', 'خفيف'], ['strong', 'قوي']], 'data-field')}</fieldset>`;
+  const cropEditor = avatar.asset?.url
+    ? `<div class="avatar-crop-editor" aria-label="معاينة قص الصورة الشخصية"><img src="${escapeHtml(avatar.asset.url)}" alt="" style="object-position:${avatar.asset.crop?.x ?? 50}% ${avatar.asset.crop?.y ?? 50}%;transform:scale(${avatar.asset.zoom || 1});transform-origin:${avatar.asset.crop?.x ?? 50}% ${avatar.asset.crop?.y ?? 50}%" /></div>${rangeField('تحريك أفقي', 'avatar.asset.crop.x', avatar.asset.crop?.x ?? 50, 0, 100, 1, '%')}${rangeField('تحريك عمودي', 'avatar.asset.crop.y', avatar.asset.crop?.y ?? 50, 0, 100, 1, '%')}${rangeField('التقريب', 'avatar.asset.zoom', avatar.asset.zoom || 1, 1, 4, 0.05, '×')}`
+    : '<p class="inspector-hint">ارفع صورة لتظهر أدوات القص والتحريك والتقريب.</p>';
+  const avatarFields = `<fieldset class="inspector-group"><legend>الصورة الشخصية</legend><label class="upload-field">رفع الصورة الشخصية<input data-upload="avatar" type="file" accept="image/jpeg,image/png,image/webp,image/gif" /></label>${cropEditor}${field('حجم الصورة', 'avatar.size', avatar.size, 'number', 'min="48" max="240"')}${selectField('الشكل', 'avatar.shape', avatar.shape, [['circle', 'دائري'], ['rounded-square', 'مربع دائري'], ['square', 'مربع']], 'data-field')}${field('لون الإطار', 'avatar.borderColor', avatar.borderColor)}${field('سمك الإطار', 'avatar.borderWidth', avatar.borderWidth, 'number', 'min="0" max="8"')}<label class="switch-field">Glow<input data-field="avatar.glow" type="checkbox" ${avatar.glow ? 'checked' : ''} /></label>${selectField('الظل', 'avatar.shadow', avatar.shadow, [['none', 'بدون'], ['soft', 'خفيف'], ['strong', 'قوي']], 'data-field')}</fieldset>`;
   const bannerFields = `<fieldset class="inspector-group"><legend>البانر</legend><label class="switch-field">إظهار البانر<input data-field="banner.visible" type="checkbox" ${banner.visible ? 'checked' : ''} /></label><label class="upload-field">رفع البانر<input data-upload="banner" type="file" accept="image/jpeg,image/png,image/webp,image/gif" /></label>${field('استدارة البانر', 'banner.borderRadius', banner.borderRadius, 'number', 'min="0" max="64"')}${field('موضع القص أفقيًا', 'banner.asset.crop.x', banner.asset?.crop?.x ?? 50, 'number', 'min="0" max="100"')}${field('موضع القص عموديًا', 'banner.asset.crop.y', banner.asset?.crop?.y ?? 50, 'number', 'min="0" max="100"')}</fieldset>`;
   const typography = `<fieldset class="inspector-group"><legend>خط الاسم</legend>${textStyleInspectorFields(state.configuration.typography.displayName, 'typography.displayName')}</fieldset><fieldset class="inspector-group"><legend>خط النبذة</legend>${textStyleInspectorFields(state.configuration.typography.bio, 'typography.bio')}</fieldset>`;
   return `${identity}${card}${avatarFields}${bannerFields}${typography}`;
@@ -1247,7 +1261,7 @@ async function uploadAsset(input) {
       state.configuration.background.asset = data.asset;
       state.configuration.background.type = data.mediaType;
     } else if (purpose === 'avatar') {
-      state.configuration.avatar.asset = data.asset;
+      state.configuration.avatar.asset = { ...data.asset, zoom: 1 };
     } else if (purpose === 'banner') {
       state.configuration.banner.asset = data.asset;
       state.configuration.banner.visible = true;
@@ -1525,9 +1539,74 @@ inspector.addEventListener('input', (event) => {
     state.configuration.elements.filter((element) => element.type === 'profile-card').forEach(refreshPreviewElement);
     return;
   }
-  if (!input.dataset.field || !['text', 'url', 'color'].includes(input.type) && input.tagName !== 'TEXTAREA') return;
+  if (!input.dataset.field || !['text', 'url', 'color', 'range'].includes(input.type) && input.tagName !== 'TEXTAREA') return;
+  const output = input.closest('label')?.querySelector('output');
+  if (output) output.value = `${input.value}${input.dataset.field === 'avatar.asset.zoom' ? '×' : '%'}`;
   applyInspectorChange(input, false);
+  if (input.dataset.field.startsWith('avatar.asset.')) {
+    const asset = state.configuration.avatar.asset;
+    const image = inspector.querySelector('.avatar-crop-editor img');
+    if (asset && image) {
+      image.style.objectPosition = assetPosition(asset);
+      image.style.transform = `scale(${asset.zoom || 1})`;
+      image.style.transformOrigin = assetTransformOrigin(asset);
+    }
+  }
 });
+inspector.addEventListener('pointerdown', (event) => {
+  const cropEditor = event.target.closest('.avatar-crop-editor');
+  const asset = state.configuration.avatar.asset;
+  if (!cropEditor || !asset) return;
+  event.preventDefault();
+  cropEditor.setPointerCapture(event.pointerId);
+  cropEditor.classList.add('is-dragging');
+  avatarCropAction = {
+    pointerId: event.pointerId,
+    node: cropEditor,
+    startX: event.clientX,
+    startY: event.clientY,
+    crop: { x: asset.crop?.x ?? 50, y: asset.crop?.y ?? 50 },
+    changed: false
+  };
+});
+inspector.addEventListener('pointermove', (event) => {
+  if (!avatarCropAction || avatarCropAction.pointerId !== event.pointerId) return;
+  const asset = state.configuration.avatar.asset;
+  if (!asset) return;
+  const rect = avatarCropAction.node.getBoundingClientRect();
+  const zoom = asset.zoom || 1;
+  asset.crop = {
+    x: EditorState.clamp(avatarCropAction.crop.x - (event.clientX - avatarCropAction.startX) / rect.width * 100 / zoom, 0, 100),
+    y: EditorState.clamp(avatarCropAction.crop.y - (event.clientY - avatarCropAction.startY) / rect.height * 100 / zoom, 0, 100)
+  };
+  avatarCropAction.changed = true;
+  const image = avatarCropAction.node.querySelector('img');
+  if (image) {
+    image.style.objectPosition = assetPosition(asset);
+    image.style.transformOrigin = assetTransformOrigin(asset);
+  }
+  const cropXInput = inspector.querySelector('[data-field="avatar.asset.crop.x"]');
+  const cropYInput = inspector.querySelector('[data-field="avatar.asset.crop.y"]');
+  if (cropXInput) {
+    cropXInput.value = String(Math.round(asset.crop.x));
+    cropXInput.closest('label')?.querySelector('output')?.replaceChildren(`${cropXInput.value}%`);
+  }
+  if (cropYInput) {
+    cropYInput.value = String(Math.round(asset.crop.y));
+    cropYInput.closest('label')?.querySelector('output')?.replaceChildren(`${cropYInput.value}%`);
+  }
+  state.configuration.elements.filter((element) => element.type === 'profile-card').forEach(refreshPreviewElement);
+});
+function finishAvatarCrop(event) {
+  if (!avatarCropAction || avatarCropAction.pointerId !== event.pointerId) return;
+  const action = avatarCropAction;
+  avatarCropAction = null;
+  action.node.classList.remove('is-dragging');
+  if (action.node.hasPointerCapture(event.pointerId)) action.node.releasePointerCapture(event.pointerId);
+  if (action.changed) commitChange();
+}
+inspector.addEventListener('pointerup', finishAvatarCrop);
+inspector.addEventListener('pointercancel', finishAvatarCrop);
 designControls.addEventListener('change', (event) => {
   if (event.target.dataset.upload) return uploadAsset(event.target);
   if (event.target.dataset.pageField) return updatePageSetting(event.target);

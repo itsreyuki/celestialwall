@@ -194,7 +194,8 @@ const assetSchema = z.object({
   url: urlSchema,
   position: z.enum(['center', 'top', 'bottom', 'left', 'right']).default('center'),
   fit: z.enum(['cover', 'contain']).default('cover'),
-  crop: z.object({ x: percentageSchema, y: percentageSchema }).strict().optional()
+  crop: z.object({ x: percentageSchema, y: percentageSchema }).strict().optional(),
+  zoom: z.number().finite().min(1).max(4).default(1)
 }).strict();
 
 const socialLinkSchema = z.object({
