@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const path = require('path');
+const fs = require('fs');
 const http = require('http');
 const express = require('express');
 const cors = require('cors');
@@ -8,19 +9,34 @@ const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const { Server } = require('socket.io');
 const passport = require('./config/passport');
-const { initCanvasDatabase, getDatabasePool, getCanvasState, saveCanvasState } = require('./db');
+const { initCanvasDatabase, getDatabasePool, getCanvasState, getUserPageBySlug, listPublishedUserPages, saveCanvasState } = require('./db');
+const { RESERVED_SLUGS, slugSchema } = require('./services/page-config');
 
 const authRoutes = require('./routes/auth');
 const apiRoutes = require('./routes/api');
 const musicRoutes = require('./routes/music');
+const pagesRoutes = require('./routes/pages');
 
 const app = express();
 const httpServer = http.createServer(app);
 const port = Number(process.env.PORT) || 3000;
 const sessionSecret = process.env.SESSION_SECRET || 'development-secret-change-me';
 const databasePool = getDatabasePool();
+const isProduction = process.env.NODE_ENV === 'production';
+const publicSiteUrl = (process.env.PUBLIC_URL || process.env.CLIENT_URL || 'https://celes.lol').replace(/\/$/, '');
+
+if (isProduction && (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32)) {
+  throw new Error('SESSION_SECRET must be at least 32 characters in production.');
+}
+if (isProduction && !process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL is required in production for persistent Pages data.');
+}
+if (isProduction && (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY)) {
+  throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required in production for persistent uploads.');
+}
 
 app.set('trust proxy', 1);
+app.disable('x-powered-by');
 
 const allowedOrigin = process.env.CLIENT_URL || `http://localhost:${port}`;
 
@@ -28,8 +44,16 @@ app.use(cors({
   origin: allowedOrigin,
   credentials: true
 }));
-app.use(express.json({ limit: '10kb' }));
-app.use(express.urlencoded({ extended: false }));
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data: blob:; media-src 'self' https: blob:; connect-src 'self' https://discord.com wss: ws:");
+  return next();
+});
+app.use(express.json({ limit: '64kb' }));
+app.use(express.urlencoded({ extended: false, limit: '32kb' }));
 
 const sessionOptions = {
   secret: sessionSecret,
@@ -60,21 +84,109 @@ app.use(passport.session());
 
 app.use('/auth', authRoutes);
 app.use('/api/music', musicRoutes);
+app.use('/api/pages', pagesRoutes);
 app.use('/api', apiRoutes);
-app.use('/assets', express.static(path.join(__dirname, 'assets')));
+app.use('/assets', express.static(path.join(__dirname, 'assets'), { maxAge: '30d', immutable: true }));
 app.use('/uploads/music', express.static(path.join(__dirname, 'data', 'music'), {
+  fallthrough: false,
+  maxAge: process.env.NODE_ENV === 'production' ? '7d' : 0
+}));
+app.use('/uploads/pages', express.static(path.join(__dirname, 'data', 'pages'), {
   fallthrough: false,
   maxAge: process.env.NODE_ENV === 'production' ? '7d' : 0
 }));
 app.use('/vendor/fabric', express.static(path.join(__dirname, 'node_modules', 'fabric', 'dist')));
 app.use('/vendor/socket.io', express.static(path.join(__dirname, 'node_modules', 'socket.io-client', 'dist')));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    if (/\.(?:js|css)$/.test(filePath)) res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+  }
+}));
+
+const publicPageTemplate = fs.readFileSync(path.join(__dirname, 'public', 'page.html'), 'utf8');
+
+function escapeHtml(value = '') {
+  return String(value).replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
+}
+
+function absolutePublicUrl(value) {
+  if (typeof value !== 'string' || !value) return `${publicSiteUrl}/assets/logo.png`;
+  try {
+    return new URL(value, `${publicSiteUrl}/`).protocol === 'https:'
+      ? new URL(value, `${publicSiteUrl}/`).toString()
+      : `${publicSiteUrl}/assets/logo.png`;
+  } catch {
+    return `${publicSiteUrl}/assets/logo.png`;
+  }
+}
+
+function publicPageHtml(page) {
+  const configuration = page.configuration || {};
+  const description = String(page.bio || `صفحة ${page.displayName} على Celestia Pages`).replace(/\s+/g, ' ').trim().slice(0, 160);
+  const image = configuration.banner?.asset?.url || configuration.avatar?.asset?.url || '/assets/logo.png';
+  const title = `${page.displayName} | Celestia`;
+  const canonical = `${publicSiteUrl}/${encodeURIComponent(page.slug)}`;
+  const meta = [
+    `<title>${escapeHtml(title)}</title>`,
+    `<meta name="description" content="${escapeHtml(description)}" />`,
+    `<meta name="robots" content="${page.visibility === 'public' ? 'index, follow' : 'noindex, nofollow'}" />`,
+    `<link rel="canonical" href="${escapeHtml(canonical)}" />`,
+    '<meta property="og:type" content="profile" />',
+    `<meta property="og:title" content="${escapeHtml(title)}" />`,
+    `<meta property="og:description" content="${escapeHtml(description)}" />`,
+    `<meta property="og:url" content="${escapeHtml(canonical)}" />`,
+    `<meta property="og:image" content="${escapeHtml(absolutePublicUrl(image))}" />`,
+    '<meta name="twitter:card" content="summary_large_image" />',
+    `<meta name="twitter:title" content="${escapeHtml(title)}" />`,
+    `<meta name="twitter:description" content="${escapeHtml(description)}" />`,
+    `<meta name="twitter:image" content="${escapeHtml(absolutePublicUrl(image))}" />`
+  ].join('\n    ');
+  return publicPageTemplate.replace('<!-- CELESTIA_PAGE_SEO -->', meta);
+}
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime() });
 });
 
+app.get('/robots.txt', (req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.type('text/plain').send(`User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /auth/\nDisallow: /pages/editor\nSitemap: ${publicSiteUrl}/sitemap.xml\n`);
+});
+
+app.get('/sitemap.xml', async (req, res, next) => {
+  try {
+    const pages = await listPublishedUserPages();
+    const urls = [
+      `<url><loc>${escapeHtml(`${publicSiteUrl}/`)}</loc></url>`,
+      ...pages.map((page) => `<url><loc>${escapeHtml(`${publicSiteUrl}/${encodeURIComponent(page.slug)}`)}</loc>${page.updatedAt ? `<lastmod>${escapeHtml(new Date(page.updatedAt).toISOString())}</lastmod>` : ''}</url>`)
+    ];
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join('')}</urlset>`);
+  } catch (error) {
+    console.error('Sitemap generation failed:', error);
+    res.status(503).type('text').send('Sitemap temporarily unavailable.');
+  }
+});
+
 app.get('/music', (req, res) => res.sendFile(path.join(__dirname, 'public', 'music.html')));
+app.get('/pages', (req, res) => res.sendFile(path.join(__dirname, 'public', 'pages.html')));
+app.get('/pages/editor', (req, res) => res.sendFile(path.join(__dirname, 'public', 'pages-editor.html')));
+app.get('/editor', (req, res) => res.redirect('/pages'));
+
+app.get('/:slug', async (req, res, next) => {
+  const parsed = slugSchema.safeParse(req.params.slug);
+  if (!parsed.success || RESERVED_SLUGS.has(req.params.slug.toLowerCase())) return next();
+
+  try {
+    const page = await getUserPageBySlug(parsed.data);
+    if (!page || !page.published || page.visibility === 'private') {
+      return res.status(404).send('Page not found.');
+    }
+    return res.type('html').send(publicPageHtml(page));
+  } catch (error) {
+    return next(error);
+  }
+});
 
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api') || req.path.startsWith('/auth')) {
@@ -85,6 +197,8 @@ app.get('*', (req, res, next) => {
 
 app.use((err, req, res, next) => {
   console.error(err);
+  if (err?.type === 'entity.too.large' || err?.status === 413) return res.status(413).json({ error: 'Request payload is too large.' });
+  if (err instanceof URIError) return res.status(400).json({ error: 'Malformed request.' });
   res.status(500).json({ error: 'حدث خطأ داخلي في الخادم.' });
 });
 

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#100d1d" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>محرر Celestia Pages</title>
+    <link rel="icon" type="image/png" href="/assets/logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/pages-editor.css" />
+  </head>
+  <body>
+    <main id="editor-app" class="editor-app" data-preview="desktop" data-panel="layers">
+      <header class="editor-toolbar">
+        <a class="editor-brand" href="/pages"><img src="/assets/logo.png" alt="شعار سيليستيا" /> CELESTIA <small>PAGES</small></a>
+        <div class="toolbar-group editor-add-tools" aria-label="إضافة عنصر">
+          <button type="button" data-add="text">+ نص</button>
+          <button type="button" data-add="social-links">+ روابط</button>
+          <button type="button" data-add="image">+ صورة</button>
+          <button type="button" data-show-stickers>+ زينة</button>
+          <button type="button" data-show-widgets>+ Widget</button>
+          <button type="button" data-add="music">+ موسيقى</button>
+        </div>
+        <div class="toolbar-group editor-actions">
+          <button id="editor-undo" type="button" title="تراجع">↶</button>
+          <button id="editor-redo" type="button" title="إعادة">↷</button>
+          <button id="preview-desktop" type="button" class="is-active">سطح المكتب</button>
+          <button id="preview-mobile" type="button">جوال</button>
+          <span id="save-status" class="save-status">محفوظ</span>
+        </div>
+      </header>
+
+      <section id="editor-gate" class="editor-gate" hidden>
+        <h1>أنشئ صفحتك أولًا</h1>
+        <p>ستظهر أدوات المحرر بعد إنشاء صفحة Celestia Pages الخاصة بك.</p>
+        <a href="/pages">الذهاب إلى صفحتي</a>
+      </section>
+
+      <section id="editor-workspace" class="editor-workspace" hidden>
+        <aside class="editor-sidebar" aria-label="إعدادات المحرر">
+          <div class="mobile-panel-tabs">
+            <button type="button" data-panel-tab="layers" class="is-active">العناصر</button>
+            <button type="button" data-panel-tab="settings">الإعدادات</button>
+          </div>
+
+          <section class="editor-panel editor-layers-panel" data-panel-name="layers">
+            <div class="panel-heading"><h2>العناصر والطبقات</h2><span id="layer-count"></span></div>
+            <div id="layers-list" class="layers-list"></div>
+          </section>
+
+          <section class="editor-panel editor-settings-panel" data-panel-name="settings">
+            <div class="panel-heading"><h2>الإعدادات</h2><button id="delete-element" type="button" class="icon-danger" title="حذف">⌫</button></div>
+            <div id="design-controls" class="design-controls"></div>
+            <div id="inspector" class="inspector"><p>اختر عنصرًا لتعديل خصائصه.</p></div>
+          </section>
+        </aside>
+
+        <section class="editor-stage">
+          <div class="editor-stage-heading"><span id="preview-label">معاينة سطح المكتب</span><a id="editor-public-link" target="_blank" rel="noopener"></a></div>
+          <div class="preview-frame"><div id="page-preview" class="page-preview" data-mode="desktop"></div></div>
+        </section>
+      </section>
+    </main>
+    <script src="/pages-editor-state.js"></script>
+    <script src="/page-responsive.js"></script>
+    <script src="/pages-editor.js"></script>
+  </body>
+</html>

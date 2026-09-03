@@ -5,7 +5,12 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "lint": "node scripts/lint.js",
+    "build": "npm run lint && node scripts/build.js",
+    "migrate": "node scripts/migrate.js",
+    "typecheck": "node --check db.js && node --check routes/pages.js && node --check services/page-config.js && node --check services/page-storage.js && node --check services/page-themes.js && node --check scripts/migrate.js && node --check scripts/lint.js && node --check scripts/build.js && node --check public/pages.js && node --check public/page-responsive.js && node --check public/page.js && node --check public/pages-editor-state.js && node --check public/pages-editor.js",
+    "test": "node --test"
   },
   "keywords": [
     "express",
@@ -28,6 +33,7 @@
     "passport-discord": "^0.1.4",
     "pg": "^8.23.0",
     "socket.io": "^4.8.1",
-    "socket.io-client": "^4.8.3"
+    "socket.io-client": "^4.8.3",
+    "zod": "^3.25.76"
   }
 }

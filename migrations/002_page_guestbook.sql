@@ -1,0 +1,10 @@
+ALTER TABLE guestbook_entries
+  ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS owner_reply VARCHAR(500),
+  ADD COLUMN IF NOT EXISTS replied_at TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS guestbook_entries_public_page_idx
+  ON guestbook_entries (page_id, pinned DESC, created_at DESC)
+  WHERE hidden = FALSE AND deleted_at IS NULL;

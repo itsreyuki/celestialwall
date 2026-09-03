@@ -1,5 +1,8 @@
 const { Pool } = require('pg');
 const crypto = require('crypto');
+const fs = require('fs/promises');
+const path = require('path');
+const { pageInputSchema, parsePageConfiguration, createDefaultPageConfiguration } = require('./services/page-config');
 
 const CANVAS_ID = 'main-wall';
 const defaultCanvasState = {
@@ -21,6 +24,10 @@ const pool = databaseUrl
 
 let canvasState = structuredClone(defaultCanvasState);
 let musicTracks = [];
+let userPages = [];
+let pageReactions = [];
+let guestbookEntries = [];
+let pageRemixes = [];
 
 function normalizeCanvasState(state) {
   return {
@@ -79,6 +86,7 @@ async function initCanvasDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await runMigrations();
 
   const result = await pool.query('SELECT state FROM canvas_state WHERE id = $1', [CANVAS_ID]);
   if (!result.rows.length) {
@@ -91,6 +99,51 @@ async function initCanvasDatabase() {
   }
 
   canvasState = normalizeCanvasState(result.rows[0].state);
+}
+
+async function runMigrations() {
+  if (!pool) return { skipped: true, applied: [] };
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      id TEXT PRIMARY KEY,
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  const migrations = [{
+    id: '001_celestia_pages',
+    file: path.join(__dirname, 'migrations', '001_celestia_pages.sql')
+  }, {
+    id: '002_page_guestbook',
+    file: path.join(__dirname, 'migrations', '002_page_guestbook.sql')
+  }, {
+    id: '003_celestia_pages_indexes',
+    file: path.join(__dirname, 'migrations', '003_celestia_pages_indexes.sql')
+  }];
+  const applied = [];
+
+  for (const migration of migrations) {
+    const existing = await pool.query('SELECT 1 FROM schema_migrations WHERE id = $1', [migration.id]);
+    if (existing.rowCount) continue;
+
+    const sql = await fs.readFile(migration.file, 'utf8');
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(sql);
+      await client.query('INSERT INTO schema_migrations (id) VALUES ($1)', [migration.id]);
+      await client.query('COMMIT');
+      applied.push(migration.id);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  return { skipped: false, applied };
 }
 
 function getDatabasePool() {
@@ -230,8 +283,293 @@ async function deleteMusicTrack(id) {
   return result.rowCount > 0;
 }
 
+function mergePageConfiguration(base, value) {
+  if (!value || typeof value !== 'object') return structuredClone(base);
+  const result = structuredClone(base);
+  Object.keys(base).forEach((key) => {
+    if (!(key in value)) return;
+    if (Array.isArray(base[key])) result[key] = structuredClone(value[key]);
+    else if (base[key] && typeof base[key] === 'object' && value[key] && typeof value[key] === 'object') result[key] = mergePageConfiguration(base[key], value[key]);
+    else result[key] = value[key];
+  });
+  return result;
+}
+
+function normalizePageConfiguration(configuration) {
+  const legacy = structuredClone(configuration || {});
+  if (Array.isArray(legacy.tabs)) legacy.tabs = legacy.tabs.map((tab) => ({ id: tab.id, label: tab.label, transition: tab.transition || 'fade', visible: tab.visible !== false }));
+  if (Array.isArray(legacy.elements)) legacy.elements = legacy.elements.map((element) => {
+    if (element.type !== 'widget' || element.widgetData) return element;
+    return { ...element, widget: 'quote', widgetData: { kind: 'quote', text: element.content || 'Widget', author: '' } };
+  });
+  const normalized = mergePageConfiguration(createDefaultPageConfiguration(), legacy);
+  if (legacy.musicPlayer?.sourceUrl && !legacy.musicPlayer.audioUrl) normalized.musicPlayer.audioUrl = legacy.musicPlayer.sourceUrl;
+  if (legacy.cursor?.type === 'dot' || legacy.cursor?.type === 'sparkle') {
+    normalized.cursor.type = 'default';
+    normalized.cursor.trail = legacy.cursor.type === 'sparkle' ? 'sparkles' : 'bubbles';
+  }
+  if (legacy.entranceScreen?.title && !legacy.entranceScreen.text) normalized.entranceScreen.text = legacy.entranceScreen.title;
+  return normalized;
+}
+
+function normalizeUserPage(page) {
+  if (!page) return null;
+
+  return {
+    id: page.id,
+    userId: page.user_id || page.userId,
+    slug: page.slug,
+    displayName: page.display_name || page.displayName,
+    bio: page.bio,
+    visibility: page.visibility,
+    published: Boolean(page.published),
+    publishedAt: page.published_at instanceof Date ? page.published_at.toISOString() : (page.published_at || page.publishedAt || null),
+    reactionsEnabled: Boolean(page.reactions_enabled ?? page.reactionsEnabled),
+    guestbookEnabled: Boolean(page.guestbook_enabled ?? page.guestbookEnabled),
+    remixEnabled: Boolean(page.remix_enabled ?? page.remixEnabled),
+    entranceEnabled: Boolean(page.entrance_enabled ?? page.entranceEnabled),
+    configVersion: Number(page.config_version || page.configVersion),
+    configuration: normalizePageConfiguration(page.configuration),
+    viewsCount: Number(page.views_count ?? page.viewsCount ?? 0),
+    createdAt: page.created_at instanceof Date ? page.created_at.toISOString() : (page.created_at || page.createdAt),
+    updatedAt: page.updated_at instanceof Date ? page.updated_at.toISOString() : (page.updated_at || page.updatedAt)
+  };
+}
+
+function createPagePayload(userId, input, id = crypto.randomUUID()) {
+  if (!userId || typeof userId !== 'string') throw new TypeError('A Discord user ID is required.');
+
+  const data = pageInputSchema.parse(input);
+  const now = new Date().toISOString();
+  return {
+    id,
+    userId,
+    slug: data.slug,
+    displayName: data.displayName,
+    bio: data.bio,
+    visibility: data.visibility,
+    published: data.published,
+    publishedAt: data.published ? now : null,
+    reactionsEnabled: data.reactionsEnabled,
+    guestbookEnabled: data.guestbookEnabled,
+    remixEnabled: data.remixEnabled,
+    entranceEnabled: data.entranceEnabled,
+    configVersion: data.configuration.configVersion,
+    configuration: parsePageConfiguration(data.configuration),
+    viewsCount: 0,
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+async function getUserPageByUserId(userId) {
+  if (!pool) return structuredClone(userPages.find((page) => page.userId === userId) || null);
+
+  const result = await pool.query('SELECT * FROM user_pages WHERE user_id = $1', [userId]);
+  return normalizeUserPage(result.rows[0]);
+}
+
+async function getUserPageBySlug(slug) {
+  if (typeof slug !== 'string') return null;
+  const normalizedSlug = slug.trim().toLowerCase();
+  if (!pool) return structuredClone(userPages.find((page) => page.slug === normalizedSlug) || null);
+
+  const result = await pool.query('SELECT * FROM user_pages WHERE slug = $1', [normalizedSlug]);
+  return normalizeUserPage(result.rows[0]);
+}
+
+async function listPublishedUserPages() {
+  if (!pool) {
+    return userPages
+      .filter((page) => page.published && page.visibility === 'public')
+      .map((page) => ({ slug: page.slug, updatedAt: page.updatedAt }));
+  }
+  const result = await pool.query('SELECT slug, updated_at FROM user_pages WHERE published = TRUE AND visibility = \'public\' ORDER BY updated_at DESC');
+  return result.rows.map((row) => ({
+    slug: row.slug,
+    updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at
+  }));
+}
+
+async function recordUserPageView(slug) {
+  if (!pool) {
+    userPages = userPages.map((item) => item.slug === slug && item.published && item.visibility === 'public'
+      ? { ...item, viewsCount: (item.viewsCount || 0) + 1 }
+      : item);
+    return structuredClone(userPages.find((item) => item.slug === slug && item.published && item.visibility === 'public') || null);
+  }
+  const result = await pool.query('UPDATE user_pages SET views_count = views_count + 1 WHERE slug = $1 AND published = TRUE AND visibility = \'public\' RETURNING *', [slug]);
+  return normalizeUserPage(result.rows[0]);
+}
+
+async function createUserPage(userId, input) {
+  const payload = createPagePayload(userId, input);
+  if (!pool) {
+    if (userPages.some((page) => page.userId === userId || page.slug === payload.slug)) {
+      const error = new Error('A page already exists for this user or slug.');
+      error.code = '23505';
+      throw error;
+    }
+    userPages.push(payload);
+    return structuredClone(payload);
+  }
+
+  const result = await pool.query(`
+    INSERT INTO user_pages (
+      id, user_id, slug, display_name, bio, visibility, published, published_at,
+      reactions_enabled, guestbook_enabled, remix_enabled, entrance_enabled,
+      config_version, configuration, views_count, created_at, updated_at
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, NOW(), NOW()
+    )
+    RETURNING *
+  `, [
+    payload.id, payload.userId, payload.slug, payload.displayName, payload.bio,
+    payload.visibility, payload.published, payload.publishedAt, payload.reactionsEnabled,
+    payload.guestbookEnabled, payload.remixEnabled, payload.entranceEnabled,
+    payload.configVersion, JSON.stringify(payload.configuration), payload.viewsCount
+  ]);
+  return normalizeUserPage(result.rows[0]);
+}
+
+async function updateUserPage(userId, input) {
+  const current = await getUserPageByUserId(userId);
+  if (!current) return null;
+
+  const payload = createPagePayload(userId, input, current.id);
+  payload.createdAt = current.createdAt;
+  payload.viewsCount = current.viewsCount;
+  payload.publishedAt = payload.published ? (current.publishedAt || payload.updatedAt) : null;
+
+  if (!pool) {
+    const duplicate = userPages.find((page) => page.slug === payload.slug && page.id !== current.id);
+    if (duplicate) {
+      const error = new Error('This page slug is already in use.');
+      error.code = '23505';
+      throw error;
+    }
+    userPages = userPages.map((page) => page.id === current.id ? payload : page);
+    return structuredClone(payload);
+  }
+
+  const result = await pool.query(`
+    UPDATE user_pages
+    SET slug = $2, display_name = $3, bio = $4, visibility = $5, published = $6,
+      published_at = $7, reactions_enabled = $8, guestbook_enabled = $9,
+      remix_enabled = $10, entrance_enabled = $11, config_version = $12,
+      configuration = $13::jsonb, updated_at = NOW()
+    WHERE user_id = $1
+    RETURNING *
+  `, [
+    userId, payload.slug, payload.displayName, payload.bio, payload.visibility,
+    payload.published, payload.publishedAt, payload.reactionsEnabled,
+    payload.guestbookEnabled, payload.remixEnabled, payload.entranceEnabled,
+    payload.configVersion, JSON.stringify(payload.configuration)
+  ]);
+  return normalizeUserPage(result.rows[0]);
+}
+
+function normalizeGuestbookEntry(entry) {
+  if (!entry) return null;
+  return {
+    id: entry.id,
+    pageId: entry.page_id || entry.pageId,
+    authorId: entry.author_user_id || entry.authorId || null,
+    authorName: entry.author_name || entry.authorName || 'Member',
+    content: entry.message || entry.content,
+    createdAt: entry.created_at instanceof Date ? entry.created_at.toISOString() : (entry.created_at || entry.createdAt),
+    pinned: Boolean(entry.pinned), hidden: Boolean(entry.hidden), deleted: Boolean(entry.deleted_at || entry.deletedAt),
+    ownerReply: entry.owner_reply || entry.ownerReply || '',
+    repliedAt: entry.replied_at instanceof Date ? entry.replied_at.toISOString() : (entry.replied_at || entry.repliedAt || null)
+  };
+}
+
+async function listGuestbookEntries(pageId, { before = null, limit = 20, includeHidden = false } = {}) {
+  const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 30);
+  if (!pool) {
+    const rows = guestbookEntries.filter((entry) => entry.pageId === pageId && (includeHidden || (!entry.hidden && !entry.deletedAt)))
+      .filter((entry) => !before || entry.createdAt < before)
+      .sort((first, second) => Number(second.pinned) - Number(first.pinned) || new Date(second.createdAt) - new Date(first.createdAt));
+    const slice = rows.slice(0, safeLimit + 1).map(normalizeGuestbookEntry);
+    return { entries: slice.slice(0, safeLimit), nextCursor: slice.length > safeLimit ? slice.at(-1).createdAt : null };
+  }
+  const result = await pool.query(`SELECT * FROM guestbook_entries WHERE page_id = $1
+    AND ($2::boolean OR (hidden = FALSE AND deleted_at IS NULL))
+    AND ($3::timestamptz IS NULL OR created_at < $3::timestamptz)
+    ORDER BY pinned DESC, created_at DESC LIMIT $4`, [pageId, includeHidden, before, safeLimit + 1]);
+  const rows = result.rows.map(normalizeGuestbookEntry);
+  return { entries: rows.slice(0, safeLimit), nextCursor: rows.length > safeLimit ? rows.at(-1).createdAt : null };
+}
+
+async function createGuestbookEntry({ pageId, authorId, authorName, content }) {
+  const entry = { id: crypto.randomUUID(), pageId, authorId, authorName, content, createdAt: new Date().toISOString(), pinned: false, hidden: false, deletedAt: null, ownerReply: '', repliedAt: null };
+  if (!pool) { guestbookEntries.unshift(entry); return normalizeGuestbookEntry(entry); }
+  const result = await pool.query(`INSERT INTO guestbook_entries (id, page_id, author_user_id, author_name, message)
+    VALUES ($1, $2, $3, $4, $5) RETURNING *`, [entry.id, pageId, authorId, authorName, content]);
+  return normalizeGuestbookEntry(result.rows[0]);
+}
+
+async function updateGuestbookEntry(pageId, entryId, changes) {
+  if (!pool) {
+    const entry = guestbookEntries.find((item) => item.id === entryId && item.pageId === pageId);
+    if (!entry) return null;
+    Object.assign(entry, changes);
+    if (changes.deleted) entry.deletedAt = new Date().toISOString();
+    if (changes.ownerReply !== undefined) entry.repliedAt = new Date().toISOString();
+    return normalizeGuestbookEntry(entry);
+  }
+  const result = await pool.query(`UPDATE guestbook_entries SET pinned = COALESCE($3, pinned), hidden = COALESCE($4, hidden),
+    deleted_at = CASE WHEN $5::boolean THEN NOW() ELSE deleted_at END,
+    owner_reply = COALESCE($6, owner_reply), replied_at = CASE WHEN $6::text IS NOT NULL THEN NOW() ELSE replied_at END
+    WHERE id = $1 AND page_id = $2 RETURNING *`, [entryId, pageId, changes.pinned ?? null, changes.hidden ?? null, Boolean(changes.deleted), changes.ownerReply ?? null]);
+  return normalizeGuestbookEntry(result.rows[0]);
+}
+
+async function getPageReactionSummary(pageId, userId = null) {
+  if (!pool) {
+    const rows = pageReactions.filter((item) => item.pageId === pageId);
+    const counts = rows.reduce((result, item) => ({ ...result, [item.reaction]: (result[item.reaction] || 0) + 1 }), {});
+    return { counts, userReactions: userId ? rows.filter((item) => item.userId === userId).map((item) => item.reaction) : [] };
+  }
+  const [countsResult, userResult] = await Promise.all([
+    pool.query('SELECT reaction, COUNT(*)::int AS count FROM page_reactions WHERE page_id = $1 GROUP BY reaction', [pageId]),
+    userId ? pool.query('SELECT reaction FROM page_reactions WHERE page_id = $1 AND user_id = $2', [pageId, userId]) : Promise.resolve({ rows: [] })
+  ]);
+  return { counts: Object.fromEntries(countsResult.rows.map((row) => [row.reaction, Number(row.count)])), userReactions: userResult.rows.map((row) => row.reaction) };
+}
+
+async function addPageReaction({ pageId, userId, reaction }) {
+  if (!pool) {
+    if (!pageReactions.some((item) => item.pageId === pageId && item.userId === userId && item.reaction === reaction)) pageReactions.push({ id: crypto.randomUUID(), pageId, userId, reaction });
+    return getPageReactionSummary(pageId, userId);
+  }
+  await pool.query('INSERT INTO page_reactions (id, page_id, user_id, reaction) VALUES ($1, $2, $3, $4) ON CONFLICT (page_id, user_id, reaction) DO NOTHING', [crypto.randomUUID(), pageId, userId, reaction]);
+  return getPageReactionSummary(pageId, userId);
+}
+
+async function removePageReaction({ pageId, userId, reaction }) {
+  if (!pool) { pageReactions = pageReactions.filter((item) => item.pageId !== pageId || item.userId !== userId || item.reaction !== reaction); return getPageReactionSummary(pageId, userId); }
+  await pool.query('DELETE FROM page_reactions WHERE page_id = $1 AND user_id = $2 AND reaction = $3', [pageId, userId, reaction]);
+  return getPageReactionSummary(pageId, userId);
+}
+
+async function createPageRemix({ sourcePageId, remixPageId, remixerUserId }) {
+  const record = { id: crypto.randomUUID(), sourcePageId, remixPageId, remixerUserId, createdAt: new Date().toISOString() };
+  if (!pool) { pageRemixes.push(record); return structuredClone(record); }
+  const result = await pool.query(`INSERT INTO page_remixes (id, source_page_id, remix_page_id, remixer_user_id)
+    VALUES ($1, $2, $3, $4) RETURNING *`, [record.id, sourcePageId, remixPageId, remixerUserId]);
+  return result.rows[0];
+}
+
+async function getPageRemixCount(sourcePageId) {
+  if (!pool) return pageRemixes.filter((item) => item.sourcePageId === sourcePageId).length;
+  const result = await pool.query('SELECT COUNT(*)::int AS count FROM page_remixes WHERE source_page_id = $1', [sourcePageId]);
+  return Number(result.rows[0].count);
+}
+
 module.exports = {
   initCanvasDatabase,
+  runMigrations,
   getDatabasePool,
   getCanvasState,
   saveCanvasState,
@@ -239,5 +577,19 @@ module.exports = {
   listMusicTracks,
   getMusicTrackById,
   createMusicTrack,
-  deleteMusicTrack
+  deleteMusicTrack,
+  getUserPageByUserId,
+  getUserPageBySlug,
+  listPublishedUserPages,
+  recordUserPageView,
+  createUserPage,
+  updateUserPage,
+  listGuestbookEntries,
+  createGuestbookEntry,
+  updateGuestbookEntry,
+  getPageReactionSummary,
+  addPageReaction,
+  removePageReaction,
+  createPageRemix,
+  getPageRemixCount
 };

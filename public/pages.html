@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#100d1d" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Celestia Pages</title>
+    <link rel="icon" type="image/png" href="/assets/logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/pages.css" />
+  </head>
+  <body>
+    <main class="pages-shell">
+      <header class="pages-topbar">
+        <a class="pages-brand" href="/"><img src="/assets/logo.png" alt="شعار سيليستيا" /><span>CELESTIA <small>PAGES</small></span></a>
+        <a class="pages-back" href="/">العودة للجدار</a>
+      </header>
+
+      <section id="pages-login" class="pages-card pages-empty" hidden>
+        <p class="pages-kicker">CELESTIA PAGES</p>
+        <h1>أنشئ مساحتك الخاصة</h1>
+        <p>سجّل الدخول أولاً لإنشاء وإدارة صفحتك الشخصية.</p>
+        <a class="pages-primary" href="/auth/discord">تسجيل الدخول عبر Discord</a>
+      </section>
+
+      <section id="pages-dashboard" class="pages-card" hidden>
+        <p class="pages-kicker">CELESTIA PAGES</p>
+        <h1>صفحتي</h1>
+        <p class="pages-intro">أنشئ رابطك الشخصي وانشره عندما تكون جاهزًا.</p>
+
+        <form id="page-create-form" class="pages-form" hidden>
+          <label>رابط الصفحة
+            <span class="slug-field"><b>celes.lol/</b><input id="page-slug" name="slug" minlength="3" maxlength="30" autocomplete="off" required /></span>
+          </label>
+          <p id="slug-status" class="pages-status" aria-live="polite"></p>
+          <button class="pages-primary" type="submit">إنشاء صفحتي</button>
+        </form>
+
+        <div id="page-panel" hidden>
+          <div class="page-link-row"><span id="page-state" class="page-state"></span><a id="page-url" target="_blank" rel="noopener"></a><span id="page-views" class="page-views" aria-label="عدد المشاهدات"></span></div>
+          <form id="page-details-form" class="pages-form">
+            <label>اسم العرض<input id="page-display-name" name="displayName" maxlength="120" required /></label>
+            <label>النبذة<textarea id="page-bio" name="bio" maxlength="500" rows="4" placeholder="اكتب نبذة بسيطة عنك"></textarea></label>
+            <button class="pages-secondary" type="submit">حفظ التعديلات</button>
+            <label class="pages-toggle">تفعيل التفاعلات<input id="page-reactions-enabled" type="checkbox" /></label>
+            <label class="pages-toggle">فتح سجل الزوار<input id="page-guestbook-enabled" type="checkbox" /></label>
+            <label class="pages-toggle">السماح بالـ Remix<input id="page-remix-enabled" type="checkbox" /></label>
+          </form>
+          <div class="pages-actions">
+            <a class="pages-secondary" href="/pages/editor">فتح المحرر</a>
+            <button id="page-publish" class="pages-primary" type="button">نشر الصفحة</button>
+            <button id="page-unpublish" class="pages-danger" type="button">إلغاء النشر</button>
+          </div>
+          <p id="page-notice" class="pages-status" aria-live="polite"></p>
+        </div>
+      </section>
+    </main>
+    <script src="/pages.js"></script>
+  </body>
+</html>

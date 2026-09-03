@@ -26,6 +26,7 @@ const membershipNotice = document.querySelector('#membership-notice');
 const canvasWrap = document.querySelector('.canvas-wrap');
 const guestViewNotice = document.querySelector('#guest-view-notice');
 const musicNavLink = document.querySelector('#music-nav-link');
+const pagesNavLink = document.querySelector('#pages-nav-link');
 const isGuestView = new URLSearchParams(window.location.search).get('view') === 'guest';
 
 let currentUser = null;
@@ -1061,12 +1062,14 @@ async function loadSession() {
     workspace.hidden = true;
     account.hidden = true;
     musicNavLink.hidden = true;
+    pagesNavLink.hidden = true;
     presence.hidden = true;
     return;
   }
 
   loginView.hidden = true;
   renderAccount(currentUser);
+  pagesNavLink.hidden = false;
 
   if (!currentUser.isMember) {
     membershipGate.hidden = false;
