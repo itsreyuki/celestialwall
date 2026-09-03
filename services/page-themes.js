@@ -74,7 +74,7 @@ function createRemixConfiguration(source) {
   config.elements = config.elements.flatMap((element) => {
     if (element.type === 'image') return [{ ...element, assetUrl: placeholderImage().url, name: 'Image placeholder' }];
     if (element.type === 'music') return [{ ...element, content: 'Music Player' }];
-    if (element.type === 'social-links') return [{ ...element }];
+    if (element.type === 'social-links') return [{ ...element, links: [] }];
     if (element.type === 'sticker' || element.type === 'decoration') return [{ ...element, assetUrl: undefined, content: '✨' }];
     if (element.type === 'widget') { const widgetData = sanitizeWidget(element.widgetData); return widgetData ? [{ ...element, widgetData, widget: widgetData.kind }] : []; }
     if (element.type === 'text') return [{ ...element, content: 'Your text' }];

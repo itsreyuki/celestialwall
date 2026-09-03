@@ -105,6 +105,15 @@ const widgetDataSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('guestbook'), text: z.string().trim().min(1).max(180) }).strict()
 ]);
 
+const socialLinkSchema = z.object({
+  id: idSchema,
+  label: z.string().trim().min(1).max(80),
+  url: socialUrlSchema,
+  icon: z.enum(SOCIAL_ICON_IDS).default('website'),
+  display: z.enum(['text', 'icon', 'both']).default('both'),
+  visible: z.boolean().default(true)
+}).strict();
+
 const positionSchema = z.object({
   x: percentageSchema,
   y: percentageSchema
@@ -162,6 +171,7 @@ const pageElementSchema = z.object({
   name: z.string().trim().min(1).max(80).optional(),
   content: z.string().max(PAGE_LIMITS.textLength).optional(),
   assetUrl: urlSchema.optional(),
+  links: z.array(socialLinkSchema).max(PAGE_LIMITS.socialLinks).optional(),
   widget: z.enum(['quote', 'mood', 'characters', 'games', 'gallery', 'counter', 'clock', 'countdown', 'poll', 'guestbook']).optional(),
   widgetData: widgetDataSchema.optional()
 }).strict().superRefine((element, context) => {
@@ -196,15 +206,6 @@ const assetSchema = z.object({
   fit: z.enum(['cover', 'contain']).default('cover'),
   crop: z.object({ x: percentageSchema, y: percentageSchema }).strict().optional(),
   zoom: z.number().finite().min(1).max(4).default(1)
-}).strict();
-
-const socialLinkSchema = z.object({
-  id: idSchema,
-  label: z.string().trim().min(1).max(80),
-  url: socialUrlSchema,
-  icon: z.enum(SOCIAL_ICON_IDS).default('website'),
-  display: z.enum(['text', 'icon', 'both']).default('both'),
-  visible: z.boolean().default(true)
 }).strict();
 
 const tabSchema = z.object({

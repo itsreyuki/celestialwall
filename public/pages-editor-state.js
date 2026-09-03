@@ -192,6 +192,10 @@
     const source = selectedElement(state);
     if (!source || source.type === 'profile-card') return state;
     const copy = clone(source);
+    if (source.type === 'social-links') {
+      copy.links = clone(source.links || state.configuration.socialLinks || []);
+      copy.style = { ...(clone(state.configuration.typography?.link || {})), ...copy.style };
+    }
     copy.id = createId(source.type);
     copy.position.x = Math.min(95, copy.position.x + 4);
     copy.position.y = Math.min(95, copy.position.y + 4);

@@ -233,6 +233,14 @@ function elementFontSize(element, mobile = mobilePreviewActive()) {
   return element.style.fontSize || (element.type === 'sticker' ? 42 : 18);
 }
 
+function linksForElement(element) {
+  return element.links || state.configuration.socialLinks || [];
+}
+
+function linkStyleForElement(element) {
+  return { ...state.configuration.typography.link, ...element.style };
+}
+
 function applyTextStyle(node, style, scale = 1) {
   node.style.fontFamily = style.fontFamily || 'Cairo';
   node.style.fontSize = `${Math.round((style.fontSize || 16) * scale * 10) / 10}px`;
@@ -266,7 +274,7 @@ function applyContentScale(elementNode, element, layout) {
   if (textNode) textNode.style.fontSize = `${elementFontSize(element)}px`;
 
   const socialNode = elementNode.querySelector('.editor-social-links');
-  if (socialNode) applyTextStyle(socialNode, state.configuration.typography.link, scale);
+  if (socialNode) applyTextStyle(socialNode, linkStyleForElement(element), scale);
 
   const sticker = elementNode.querySelector('.editor-sticker');
   if (sticker) sticker.style.fontSize = `${elementFontSize(element)}px`;
@@ -489,8 +497,8 @@ function contentNode(element, layout) {
   if (element.type === 'social-links') {
     const node = document.createElement('div');
     node.className = 'editor-social-links';
-    applyTextStyle(node, state.configuration.typography.link, scale);
-    const links = state.configuration.socialLinks.length ? state.configuration.socialLinks : [{ label: 'رابطك' }];
+    applyTextStyle(node, linkStyleForElement(element), scale);
+    const links = linksForElement(element).length ? linksForElement(element) : [{ label: 'رابطك' }];
     links.filter((link) => link.visible !== false).forEach((link) => {
       const item = document.createElement('span');
       item.className = 'editor-social-link';
@@ -758,12 +766,12 @@ function widgetInspectorFields(element) {
   return `${controls}${appearance}`;
 }
 
-function socialLinksInspectorFields() {
+function socialLinksInspectorFields(element) {
   const iconOptions = socialIcons?.options || [['website', 'Website'], ['link', 'Link']];
-  const links = state.configuration.socialLinks;
+  const links = linksForElement(element);
   const fields = links.map((link, index) => {
     const remove = `<button type="button" data-social-action="remove" data-social-index="${index}" ${links.length === 1 ? 'disabled' : ''}>Remove link</button>`;
-    return `<fieldset class="social-link-fields"><legend>Link ${index + 1}</legend>${field('Label', `socialLinks.${index}.label`, link.label)}${field('URL', `socialLinks.${index}.url`, link.url, 'url')}${selectField('Icon', `socialLinks.${index}.icon`, link.icon || 'website', iconOptions, 'data-field')}${selectField('Display', `socialLinks.${index}.display`, link.display || 'both', [['both', 'Text and icon'], ['text', 'Text only'], ['icon', 'Icon only']], 'data-field')}<label class="switch-field">Visible<input data-field="socialLinks.${index}.visible" type="checkbox" ${link.visible !== false ? 'checked' : ''} /></label>${remove}</fieldset>`;
+    return `<fieldset class="social-link-fields"><legend>Link ${index + 1}</legend>${field('Label', `links.${index}.label`, link.label)}${field('URL', `links.${index}.url`, link.url, 'url')}${selectField('Icon', `links.${index}.icon`, link.icon || 'website', iconOptions, 'data-field')}${selectField('Display', `links.${index}.display`, link.display || 'both', [['both', 'Text and icon'], ['text', 'Text only'], ['icon', 'Icon only']], 'data-field')}<label class="switch-field">Visible<input data-field="links.${index}.visible" type="checkbox" ${link.visible !== false ? 'checked' : ''} /></label>${remove}</fieldset>`;
   }).join('');
   return `${fields}<button type="button" data-social-action="add" ${links.length >= 12 ? 'disabled' : ''}>+ Add link</button>`;
 }
@@ -828,7 +836,7 @@ function renderInspector() {
   } else if (element.type === 'image') {
     content = `${field('رابط الصورة HTTPS', 'assetUrl', element.assetUrl || '', 'url')}${field('استدارة الحواف', 'style.borderRadius', element.style.borderRadius || 12, 'number', 'min="0" max="100"')}${selectField('ملاءمة الصورة', 'style.objectFit', element.style.objectFit || 'cover', [['cover', 'تغطية'], ['contain', 'احتواء']], 'data-field')}${selectField('موضع الصورة', 'style.objectPosition', element.style.objectPosition || 'center', [['center', 'الوسط'], ['top', 'أعلى'], ['bottom', 'أسفل'], ['left', 'يسار'], ['right', 'يمين']], 'data-field')}`;
   } else if (element.type === 'social-links') {
-    content = `${socialLinksInspectorFields()}<fieldset class="inspector-group"><legend>تنسيق الروابط</legend>${textStyleInspectorFields(state.configuration.typography.link, 'typography.link')}</fieldset>`;
+    content = `${socialLinksInspectorFields(element)}<fieldset class="inspector-group"><legend>تنسيق الروابط</legend>${textStyleInspectorFields(linkStyleForElement(element), 'style')}</fieldset>`;
   } else if (element.type === 'widget') {
     content = widgetInspectorFields(element);
   }
@@ -995,8 +1003,10 @@ function addElement(type) {
   }
   const tabId = activeTabId || state.configuration.tabs[0]?.id;
   if (type === 'social-links') {
-    if (!state.configuration.socialLinks.length) state.configuration.socialLinks.push({ id: EditorState.createId('link'), label: 'رابط جديد', url: 'https://example.com', icon: 'website', display: 'both', visible: true });
-    EditorState.addElement(state, { type, size: { width: 48, height: 10 }, tabId });
+    const links = state.configuration.socialLinks.length
+      ? clone(state.configuration.socialLinks)
+      : [{ id: EditorState.createId('link'), label: 'رابط جديد', url: 'https://example.com', icon: 'website', display: 'both', visible: true }];
+    EditorState.addElement(state, { type, size: { width: 48, height: 10 }, style: clone(state.configuration.typography.link), links, tabId });
   } else if (type === 'text') {
     EditorState.addElement(state, { type, content: 'اكتب هنا...', size: { width: 38, height: 12 }, style: { color: '#fff7dc', fontSize: 20 }, tabId });
   } else if (type === 'image') {
@@ -1700,10 +1710,13 @@ inspector.addEventListener('click', (event) => {
   if (musicAction && removeConfiguredAsset(musicAction.dataset.musicAction)) return;
   const socialAction = event.target.closest('[data-social-action]');
   if (socialAction) {
-    if (socialAction.dataset.socialAction === 'add' && state.configuration.socialLinks.length < 12) {
-      state.configuration.socialLinks.push({ id: EditorState.createId('link'), label: 'رابط جديد', url: 'https://example.com', icon: 'website', display: 'both', visible: true });
+    const element = selected();
+    if (element?.type !== 'social-links') return;
+    element.links ||= clone(state.configuration.socialLinks || []);
+    if (socialAction.dataset.socialAction === 'add' && element.links.length < 12) {
+      element.links.push({ id: EditorState.createId('link'), label: 'رابط جديد', url: 'https://example.com', icon: 'website', display: 'both', visible: true });
     } else if (socialAction.dataset.socialAction === 'remove') {
-      state.configuration.socialLinks.splice(Number(socialAction.dataset.socialIndex), 1);
+      element.links.splice(Number(socialAction.dataset.socialIndex), 1);
     }
     commitChange();
     return;

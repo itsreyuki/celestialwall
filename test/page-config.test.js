@@ -133,3 +133,15 @@ test('social links validate display choices and safe link protocols', () => {
   configuration.socialLinks[0].url = 'javascript:alert(1)';
   assert.equal(validatePageConfiguration(configuration).success, false);
 });
+
+test('social link elements can persist isolated links', () => {
+  const configuration = createDefaultPageConfiguration();
+  configuration.elements.push({
+    id: 'isolated-links', type: 'social-links', position: { x: 50, y: 75 }, size: { width: 48, height: 10 },
+    zIndex: 2, visible: true, style: { color: '#f5ce6b' },
+    links: [{ id: 'isolated-link', label: 'Discord', url: 'https://discord.gg/celes', icon: 'discord', display: 'both', visible: true }]
+  });
+  assert.equal(validatePageConfiguration(configuration).success, true);
+  configuration.elements[1].links[0].url = 'javascript:alert(1)';
+  assert.equal(validatePageConfiguration(configuration).success, false);
+});

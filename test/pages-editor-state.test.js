@@ -69,6 +69,23 @@ test('editor state duplicates, reorders, hides, and deletes selected elements', 
   assert.equal(state.historyIndex, historyIndex);
 });
 
+test('duplicated social links own independent content and styles', () => {
+  const configuration = createDefaultPageConfiguration();
+  configuration.socialLinks = [{ id: 'global-link', label: 'Original', url: 'https://celes.lol', icon: 'website', display: 'both', visible: true }];
+  const state = EditorState.createState(configuration);
+  EditorState.addElement(state, { type: 'social-links', position: { x: 50, y: 50 }, size: { width: 48, height: 10 }, style: {} });
+  const source = EditorState.selectedElement(state);
+  EditorState.duplicateSelected(state);
+  const copy = EditorState.selectedElement(state);
+
+  copy.links[0].label = 'Copy';
+  copy.style.color = '#ff0000';
+  assert.equal(source.links, undefined);
+  assert.equal(configuration.socialLinks[0].label, 'Original');
+  assert.equal(copy.links[0].label, 'Copy');
+  assert.notEqual(copy.style, source.style);
+});
+
 test('resize geometry keeps the opposite corner fixed in every direction', () => {
   const layout = { position: { x: 50, y: 50 }, size: { width: 40, height: 20 } };
 
