@@ -21,6 +21,15 @@ function geometry(node, element) {
   node.style.boxShadow = element.style.shadow === 'strong' ? '0 14px 28px rgba(0,0,0,.5)' : (element.style.shadow === 'soft' ? '0 8px 18px rgba(0,0,0,.3)' : 'none');
   if (element.style.glow) node.style.boxShadow += ', 0 0 20px rgba(241,199,94,.45)';
 }
+function elementVisualScale(element) {
+  const layout = window.CelestiaPageResponsive.resolveElementLayout(element, mobileViewport());
+  const baseSizes = {
+    'profile-card': [72, 48], text: [38, 12], 'social-links': [48, 10],
+    image: [24, 24], sticker: [14, 16], music: [35, 11]
+  };
+  const [baseWidth, baseHeight] = baseSizes[element.type] || [38, element.widgetData?.kind === 'gallery' ? 30 : 16];
+  return Math.max(.55, Math.min(2.4, Math.sqrt((layout.size.width / baseWidth) * (layout.size.height / baseHeight))));
+}
 function scaleWidget(node, element) {
   const layout = window.CelestiaPageResponsive.resolveElementLayout(element, mobileViewport());
   const baseHeight = element.widgetData?.kind === 'gallery' ? 30 : 16;
@@ -49,21 +58,22 @@ function createBackground(configuration) {
   const grain = document.createElement('div'); grain.className = 'public-background-grain'; grain.style.opacity = String(background.grain || 0);
   holder.append(overlay, vignette, grain); return holder;
 }
-function profileCard(page, configuration) {
+function profileCard(page, configuration, element) {
+  const scale = elementVisualScale(element);
   const profile = configuration.profileCard; const card = document.createElement('article'); card.className = 'public-profile-card';
-  card.style.background = profile.backgroundColor; card.style.opacity = String(profile.opacity); card.style.borderColor = profile.borderColor; card.style.borderWidth = `${profile.borderWidth}px`; card.style.borderRadius = `${profile.borderRadius}px`; card.style.padding = `${profile.padding}px`; card.style.maxWidth = `${profile.width}px`; card.style.textAlign = profile.alignment; card.style.backdropFilter = profile.glass ? `blur(${profile.blur}px)` : 'none';
+  card.style.background = profile.backgroundColor; card.style.opacity = String(profile.opacity); card.style.borderColor = profile.borderColor; card.style.borderWidth = `${profile.borderWidth}px`; card.style.borderRadius = `${profile.borderRadius}px`; card.style.padding = `${Math.round(profile.padding * scale)}px`; card.style.width = '100%'; card.style.height = '100%'; card.style.maxWidth = '100%'; card.style.textAlign = profile.alignment; card.style.backdropFilter = profile.glass ? `blur(${profile.blur}px)` : 'none';
   card.style.boxShadow = profile.shadow === 'strong' ? '0 24px 56px rgba(0,0,0,.54)' : (profile.shadow === 'soft' ? '0 14px 34px rgba(0,0,0,.32)' : 'none'); if (profile.glow) card.style.boxShadow += ', 0 0 28px rgba(241,199,94,.35)';
   const banner = configuration.banner;
   if (banner.visible && banner.asset?.url) { const bannerNode = document.createElement('div'); bannerNode.className = 'public-banner'; bannerNode.style.borderRadius = `${banner.borderRadius}px`; bannerNode.append(mediaElement(banner.asset)); card.append(bannerNode); }
-  const avatarConfig = configuration.avatar; const avatar = document.createElement('div'); avatar.className = 'public-avatar'; avatar.style.width = `${avatarConfig.size}px`; avatar.style.height = `${avatarConfig.size}px`; avatar.style.borderRadius = avatarConfig.shape === 'circle' ? '50%' : (avatarConfig.shape === 'rounded-square' ? '22%' : '0'); avatar.style.borderColor = avatarConfig.borderColor; avatar.style.borderWidth = `${avatarConfig.borderWidth}px`; avatar.style.boxShadow = avatarConfig.shadow === 'strong' ? '0 12px 26px rgba(0,0,0,.48)' : (avatarConfig.shadow === 'soft' ? '0 7px 18px rgba(0,0,0,.3)' : 'none'); if (avatarConfig.glow) avatar.style.boxShadow += ', 0 0 20px rgba(241,199,94,.42)';
+  const avatarConfig = configuration.avatar; const avatar = document.createElement('div'); avatar.className = 'public-avatar'; avatar.style.width = `${Math.round(avatarConfig.size * scale)}px`; avatar.style.height = `${Math.round(avatarConfig.size * scale)}px`; avatar.style.borderRadius = avatarConfig.shape === 'circle' ? '50%' : (avatarConfig.shape === 'rounded-square' ? '22%' : '0'); avatar.style.borderColor = avatarConfig.borderColor; avatar.style.borderWidth = `${avatarConfig.borderWidth}px`; avatar.style.boxShadow = avatarConfig.shadow === 'strong' ? '0 12px 26px rgba(0,0,0,.48)' : (avatarConfig.shadow === 'soft' ? '0 7px 18px rgba(0,0,0,.3)' : 'none'); if (avatarConfig.glow) avatar.style.boxShadow += ', 0 0 20px rgba(241,199,94,.42)';
   if (avatarConfig.asset?.url) avatar.append(mediaElement(avatarConfig.asset)); else avatar.append(text((page.displayName || '?').trim().charAt(0).toUpperCase() || '?'));
-  const name = document.createElement('h1'); name.textContent = page.displayName; const bio = document.createElement('p'); bio.className = 'public-bio'; bio.textContent = page.bio; card.append(avatar, name, bio); return card;
+  const name = document.createElement('h1'); name.style.fontSize = `${Math.round(30 * scale)}px`; name.textContent = page.displayName; const bio = document.createElement('p'); bio.className = 'public-bio'; bio.style.fontSize = `${Math.round(15 * scale)}px`; bio.textContent = page.bio; card.append(avatar, name, bio); return card;
 }
 function textElement(element) {
-  const node = document.createElement('div'); node.className = 'public-text'; node.textContent = element.content || ''; node.style.fontFamily = element.style.fontFamily || 'Cairo'; node.style.fontSize = `${element.style.fontSize || 18}px`; node.style.fontWeight = element.style.fontWeight || '400'; node.style.textAlign = element.style.textAlign || 'right'; node.style.letterSpacing = `${element.style.letterSpacing || 0}px`; node.style.lineHeight = String(element.style.lineHeight || 1.4); if (element.style.effect && element.style.effect !== 'none') node.classList.add(`effect-${element.style.effect}`); return node;
+  const scale = elementVisualScale(element); const node = document.createElement('div'); node.className = 'public-text'; node.textContent = element.content || ''; node.style.fontFamily = element.style.fontFamily || 'Cairo'; node.style.fontSize = `${Math.round((element.style.fontSize || 18) * scale)}px`; node.style.fontWeight = element.style.fontWeight || '400'; node.style.textAlign = element.style.textAlign || 'right'; node.style.letterSpacing = `${element.style.letterSpacing || 0}px`; node.style.lineHeight = String(element.style.lineHeight || 1.4); if (element.style.effect && element.style.effect !== 'none') node.classList.add(`effect-${element.style.effect}`); return node;
 }
-function socialLinks(configuration) {
-  const node = document.createElement('nav'); node.className = 'public-links'; configuration.socialLinks.filter((link) => link.visible !== false).forEach((link) => { const anchor = document.createElement('a'); const display = link.display || 'both'; anchor.href = link.url; anchor.target = '_blank'; anchor.rel = 'noopener noreferrer'; anchor.style.display = 'inline-flex'; anchor.style.alignItems = 'center'; anchor.style.justifyContent = 'center'; anchor.style.gap = '.45em'; if (display !== 'text') anchor.append(window.CelestiaSocialIcons?.create(link.icon || 'website', link.label) || text('◉')); if (display !== 'icon') anchor.append(text(link.label)); node.append(anchor); }); return node;
+function socialLinks(configuration, element) {
+  const scale = elementVisualScale(element); const node = document.createElement('nav'); node.className = 'public-links'; node.style.fontSize = `${Math.round(14 * scale)}px`; configuration.socialLinks.filter((link) => link.visible !== false).forEach((link) => { const anchor = document.createElement('a'); const display = link.display || 'both'; anchor.href = link.url; anchor.target = '_blank'; anchor.rel = 'noopener noreferrer'; anchor.style.display = 'inline-flex'; anchor.style.alignItems = 'center'; anchor.style.justifyContent = 'center'; anchor.style.gap = '.45em'; if (display !== 'text') anchor.append(window.CelestiaSocialIcons?.create(link.icon || 'website', link.label) || text('◉')); if (display !== 'icon') anchor.append(text(link.label)); node.append(anchor); }); return node;
 }
 async function publicRequest(url, options = {}) {
   const response = await fetch(url, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }, ...options });
@@ -132,7 +142,7 @@ function widgetNode(page, element) {
 }
 function renderElement(page, configuration, element) {
   const node = document.createElement('div'); node.className = `public-element public-${element.type}`; if (element.type === 'image' && element.style.animation && element.style.animation !== 'none') node.classList.add(`image-animation-${element.style.animation}`); geometry(node, element);
-  if (element.type === 'profile-card') node.append(profileCard(page, configuration)); else if (element.type === 'text') node.append(textElement(element)); else if (element.type === 'social-links') node.append(socialLinks(configuration)); else if (element.type === 'image') { const image = mediaElement({ url: element.assetUrl, fit: 'cover' }, false, element.position.y > 62); image.alt = element.name || ''; node.append(image); } else if (element.type === 'widget') { const widget = element.widgetData.kind === 'guestbook' ? guestbookWidget(page, element) : widgetNode(page, element); if (widget) { scaleWidget(widget, element); node.append(widget); } else node.hidden = true; } else if (element.type === 'music') node.append(musicPlayer(configuration.musicPlayer) || text('Music Player')); else node.append(text(element.content || '✨')); return node;
+  if (element.type === 'profile-card') node.append(profileCard(page, configuration, element)); else if (element.type === 'text') node.append(textElement(element)); else if (element.type === 'social-links') node.append(socialLinks(configuration, element)); else if (element.type === 'image') { const image = mediaElement({ url: element.assetUrl, fit: 'cover' }, false, element.position.y > 62); image.alt = element.name || ''; node.append(image); } else if (element.type === 'widget') { const widget = element.widgetData.kind === 'guestbook' ? guestbookWidget(page, element) : widgetNode(page, element); if (widget) { scaleWidget(widget, element); node.append(widget); } else node.hidden = true; } else if (element.type === 'music') { const player = musicPlayer(configuration.musicPlayer); if (player) { player.style.position = 'static'; player.style.width = '100%'; player.style.maxWidth = 'none'; player.style.height = '100%'; node.append(player); } else node.append(text('Music Player')); } else { const sticker = document.createElement('span'); sticker.style.fontSize = `${Math.round(42 * elementVisualScale(element))}px`; sticker.textContent = element.content || '✨'; node.append(sticker); } return node;
 }
 function entranceScreen(configuration, onEnter) {
   const config = configuration.entranceScreen; if (!config.enabled) return null;
@@ -158,7 +168,7 @@ function render(page) {
   const elements = configuration.elements.some((element) => element.type === 'profile-card') ? configuration.elements : [{ id: 'profile-card', type: 'profile-card', position: { x: 50, y: 50 }, size: { width: 72, height: 48 }, zIndex: 1, visible: true, style: {} }, ...configuration.elements];
   const visibleTabs = configuration.tabs.filter((tab) => tab.visible !== false);
   const tabLayer = document.createElement('div'); tabLayer.className = 'public-tab-content';
-  const nodes = elements.filter((element) => element.visible !== false && element.type !== 'music').sort((first, second) => first.zIndex - second.zIndex).map((element) => ({ element, node: renderElement(page, configuration, element) }));
+  const nodes = elements.filter((element) => element.visible !== false).sort((first, second) => first.zIndex - second.zIndex).map((element) => ({ element, node: renderElement(page, configuration, element) }));
   nodes.forEach(({ node }) => tabLayer.append(node)); layout.append(tabLayer);
   if (visibleTabs.length) {
     const navigation = document.createElement('nav'); navigation.className = 'public-tabs'; let activeTab = visibleTabs[0].id;
@@ -166,7 +176,7 @@ function render(page) {
     visibleTabs.forEach((tab) => { const button = document.createElement('button'); button.type = 'button'; button.dataset.tabId = tab.id; button.textContent = tab.label; button.addEventListener('click', () => setTab(tab.id)); navigation.append(button); });
     layout.append(navigation); setTab(activeTab);
   }
-  const player = musicPlayer(configuration.musicPlayer); if (player) layout.append(player);
+  if (!elements.some((element) => element.type === 'music' && element.visible !== false)) { const player = musicPlayer(configuration.musicPlayer); if (player) layout.append(player); }
   const reactions = reactionBar(page); if (reactions) layout.append(reactions);
   const remix = remixButton(page); if (remix) layout.append(remix);
   const brand = document.createElement('a'); brand.className = 'public-brand'; brand.href = '/'; brand.textContent = 'CELESTIA PAGES'; layout.append(brand);
