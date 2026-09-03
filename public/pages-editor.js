@@ -106,12 +106,16 @@ function applyGeometry(elementNode, element, layout = responsive.resolveElementL
   elementNode.style.width = `${layout.size.width}%`;
   elementNode.style.height = `${layout.size.height}%`;
   elementNode.style.zIndex = String(element.zIndex);
-  elementNode.style.transform = `translate(-50%, -50%) scale(${layout.scale})`;
+  elementNode.style.transform = `translate(-50%, -50%) scale(${layout.scale}) rotate(${element.style.rotation || 0}deg)`;
   elementNode.style.textAlign = layout.alignment || '';
   elementNode.style.color = element.style.color || '';
   elementNode.style.backgroundColor = ['profile-card', 'social-links'].includes(element.type) ? '' : (element.style.backgroundColor || '');
   elementNode.style.opacity = element.style.opacity ?? '';
   elementNode.style.borderRadius = element.style.borderRadius !== undefined ? `${element.style.borderRadius}px` : '';
+  const selectionRadius = element.type === 'profile-card'
+    ? state.configuration.profileCard.borderRadius
+    : (element.type === 'music' ? 10 : (element.style.borderRadius || 0));
+  elementNode.style.setProperty('--selection-radius', `${selectionRadius}px`);
   const previewRect = preview.getBoundingClientRect();
   if (previewRect.width && previewRect.height) elementNode.dataset.dimensions = `${Math.round(previewRect.width * layout.size.width * layout.scale / 100)} × ${Math.round(previewRect.height * layout.size.height * layout.scale / 100)} px`;
   elementNode.style.boxShadow = element.style.shadow === 'strong'
@@ -447,7 +451,18 @@ function widgetPreview(element) {
     });
     node.append(gallery);
   } else if (data.kind === 'clock') {
-    node.textContent = new Intl.DateTimeFormat('ar', { hour: '2-digit', minute: '2-digit', second: data.showSeconds ? '2-digit' : undefined, hour12: data.format === '12h' }).format(new Date());
+    const now = new Date();
+    const icon = document.createElement('span');
+    icon.className = 'editor-clock-icon';
+    icon.textContent = '✦';
+    const face = document.createElement('span');
+    face.className = 'editor-clock-face';
+    const time = document.createElement('strong');
+    time.textContent = new Intl.DateTimeFormat('ar', { hour: '2-digit', minute: '2-digit', second: data.showSeconds ? '2-digit' : undefined, hour12: data.format === '12h' }).format(now);
+    const date = document.createElement('small');
+    date.textContent = new Intl.DateTimeFormat('ar', { weekday: 'long', day: 'numeric', month: 'long' }).format(now);
+    face.append(time, date);
+    node.append(icon, face);
   } else if (data.kind === 'countdown') {
     const difference = Math.max(0, new Date(data.targetDate).getTime() - Date.now());
     const total = Math.floor(difference / 1000);
@@ -469,11 +484,20 @@ function widgetPreview(element) {
   } else if (data.kind === 'counter') {
     node.textContent = `${data.label}: ${currentPage.viewsCount || 0}`;
   } else {
+    const header = document.createElement('span');
+    header.className = 'editor-guestbook-header';
+    const icon = document.createElement('b');
+    icon.textContent = '✦';
     const title = document.createElement('strong');
-    title.textContent = 'Guestbook';
+    title.textContent = 'سجل الزوار';
+    header.append(icon, title);
     const message = document.createElement('span');
+    message.className = 'editor-guestbook-message';
     message.textContent = data.text;
-    node.append(title, message);
+    const action = document.createElement('span');
+    action.className = 'editor-guestbook-action';
+    action.textContent = 'اكتب رسالة لطيفة…';
+    node.append(header, message, action);
   }
   return node;
 }
@@ -557,11 +581,9 @@ function contentNode(element, layout) {
   details.className = 'editor-music-details';
   const title = document.createElement('strong');
   title.textContent = music.title || 'عنوان الأغنية';
-  const artist = document.createElement('small');
-  artist.textContent = music.artist || 'الفنان';
   const progress = document.createElement('i');
   progress.className = 'editor-music-progress';
-  details.append(title, artist, progress);
+  details.append(title, progress);
   node.append(cover, play, details);
   return node;
 }
@@ -569,7 +591,7 @@ function contentNode(element, layout) {
 function contentShell(element, content = contentNode(element, responsive.resolveElementLayout(element, mobilePreviewActive()))) {
   const shell = document.createElement('div');
   shell.className = 'editor-element-content';
-  shell.style.transform = `rotate(${element.style.rotation || 0}deg) scaleX(${element.style.flipX ? -1 : 1})`;
+  shell.style.transform = `scaleX(${element.style.flipX ? -1 : 1})`;
   content.style.width = '100%';
   content.style.height = '100%';
   shell.append(content);
@@ -631,7 +653,7 @@ function renderPreview() {
   if (state.configuration.musicPlayer.enabled && !hasMusicElement) {
     const player = document.createElement('div');
     player.className = `preview-music-player preset-${state.configuration.musicPlayer.preset}`;
-    player.textContent = `▶ ${state.configuration.musicPlayer.title || 'عنوان الأغنية'} — ${state.configuration.musicPlayer.artist || 'الفنان'}`;
+    player.textContent = `▶ ${state.configuration.musicPlayer.title || 'عنوان الأغنية'}`;
     preview.append(player);
   }
   renderEntrancePreview();
@@ -1041,7 +1063,8 @@ function addSticker(name) {
 
 function addWidget(kind) {
   if (state.configuration.elements.length >= ELEMENT_LIMIT || state.configuration.elements.filter((item) => item.type === 'widget').length >= 6) return;
-  EditorState.addElement(state, { type: 'widget', widget: kind, widgetData: widgetDefault(kind), name: `Widget: ${kind}`, size: { width: 38, height: kind === 'gallery' ? 30 : 16 }, tabId: activeTabId || state.configuration.tabs[0]?.id });
+  const spaciousWidget = kind === 'gallery' || kind === 'guestbook';
+  EditorState.addElement(state, { type: 'widget', widget: kind, widgetData: widgetDefault(kind), name: `Widget: ${kind}`, size: { width: kind === 'guestbook' ? 48 : 38, height: spaciousWidget ? 30 : 16 }, tabId: activeTabId || state.configuration.tabs[0]?.id });
   openSettingsPanel();
   renderAll();
   scheduleAutosave();
