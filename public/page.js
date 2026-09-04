@@ -13,15 +13,16 @@ function assetTransformOrigin(asset) { return asset?.crop ? `${asset.crop.x}% ${
 function mobileViewport() { return window.matchMedia('(max-width: 700px)').matches; }
 function geometry(node, element) {
   const layout = window.CelestiaPageResponsive.resolveElementLayout(element, mobileViewport());
+  const contentOwnsAppearance = ['profile-card', 'social-links', 'widget', 'music'].includes(element.type);
   node.hidden = !layout.visible;
   node.style.left = `${layout.position.x}%`; node.style.top = `${layout.position.y}%`;
   node.style.width = `${layout.size.width}%`; node.style.height = `${layout.size.height}%`; node.style.zIndex = String(element.zIndex);
   node.style.transform = `translate(-50%, -50%) rotate(${element.style.rotation || 0}deg) scale(${layout.scale}) scaleX(${element.style.flipX ? -1 : 1})`;
   node.style.textAlign = layout.alignment || '';
-  node.style.color = element.style.color || ''; node.style.backgroundColor = ['profile-card', 'social-links'].includes(element.type) ? '' : (element.style.backgroundColor || ''); node.style.opacity = element.style.opacity ?? '';
-  node.style.borderRadius = element.style.borderRadius !== undefined ? `${element.style.borderRadius}px` : '';
-  node.style.boxShadow = element.style.shadow === 'strong' ? '0 14px 28px rgba(0,0,0,.5)' : (element.style.shadow === 'soft' ? '0 8px 18px rgba(0,0,0,.3)' : 'none');
-  if (element.style.glow) node.style.boxShadow += ', 0 0 20px rgba(241,199,94,.45)';
+  node.style.color = element.style.color || ''; node.style.backgroundColor = contentOwnsAppearance ? '' : (element.style.backgroundColor || ''); node.style.opacity = element.style.opacity ?? '';
+  node.style.borderRadius = !contentOwnsAppearance && element.style.borderRadius !== undefined ? `${element.style.borderRadius}px` : '';
+  node.style.boxShadow = contentOwnsAppearance ? 'none' : (element.style.shadow === 'strong' ? '0 14px 28px rgba(0,0,0,.5)' : (element.style.shadow === 'soft' ? '0 8px 18px rgba(0,0,0,.3)' : 'none'));
+  if (!contentOwnsAppearance && element.style.glow) node.style.boxShadow += ', 0 0 20px rgba(241,199,94,.45)';
 }
 function elementVisualScale(element) {
   return window.CelestiaPageResponsive.elementVisualScale(element, mobileViewport());
@@ -37,6 +38,8 @@ function scaleWidget(node, element) {
   node.style.color = element.style.color || '';
   node.style.background = element.style.backgroundColor || '';
   node.style.borderRadius = `${element.style.borderRadius ?? 14}px`;
+  node.style.boxShadow = element.style.shadow === 'strong' ? '0 14px 28px rgba(0,0,0,.5)' : (element.style.shadow === 'soft' ? '0 8px 18px rgba(0,0,0,.3)' : 'none');
+  if (element.style.glow) node.style.boxShadow += ', 0 0 20px rgba(241,199,94,.45)';
   node.querySelectorAll('.widget-favorites figure').forEach((figure) => { figure.style.minWidth = `${mediaSize}px`; });
   node.querySelectorAll('.widget-favorites img').forEach((image) => { image.style.width = `${mediaSize}px`; image.style.height = `${mediaSize}px`; });
   node.querySelectorAll('.widget-gallery img').forEach((image) => { image.style.minHeight = `${Math.max(8, Math.round(42 * scale))}px`; image.style.maxHeight = `${Math.max(18, Math.round(110 * scale))}px`; });
@@ -203,7 +206,9 @@ function widgetNode(page, element) {
   return node;
 }
 function renderElement(page, configuration, element) {
-  const node = document.createElement('div'); node.className = `public-element public-${element.type}`; if (element.type === 'image' && element.style.animation && element.style.animation !== 'none') node.classList.add(`image-animation-${element.style.animation}`); geometry(node, element);
+  const node = document.createElement('div');
+  const typeClass = ['profile-card', 'widget'].includes(element.type) ? `public-${element.type}-element` : `public-${element.type}`;
+  node.className = `public-element ${typeClass}`; if (element.type === 'image' && element.style.animation && element.style.animation !== 'none') node.classList.add(`image-animation-${element.style.animation}`); geometry(node, element);
   if (element.type === 'profile-card') node.append(profileCard(page, configuration, element)); else if (element.type === 'text') node.append(textElement(element)); else if (element.type === 'social-links') node.append(socialLinks(configuration, element)); else if (element.type === 'image') { const image = mediaElement({ url: element.assetUrl, fit: element.style.objectFit || 'cover', position: element.style.objectPosition || 'center' }, false, element.position.y > 62); image.alt = element.name || ''; node.append(image); } else if (element.type === 'widget') { const widget = element.widgetData.kind === 'guestbook' ? guestbookWidget(page, element) : widgetNode(page, element); if (widget) { scaleWidget(widget, element); node.append(widget); } else node.hidden = true; } else if (element.type === 'music') { const player = musicPlayer(configuration.musicPlayer); if (player) { player.style.position = 'static'; player.style.width = '100%'; player.style.maxWidth = 'none'; player.style.height = '100%'; scaleMusicPlayer(player, element); node.append(player); } else node.append(text('Music Player')); } else { const sticker = document.createElement('span'); const fontSize = mobileViewport() && element.mobileOverrides?.fontSize !== undefined ? element.mobileOverrides.fontSize : (element.style.fontSize || 42); sticker.style.fontSize = `${fontSize}px`; sticker.textContent = element.content || '✨'; node.append(sticker); } return node;
 }
 function entranceScreen(configuration, onEnter) {

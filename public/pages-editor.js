@@ -115,6 +115,7 @@ function elementLabel(element) {
 }
 
 function applyGeometry(elementNode, element, layout = responsive.resolveElementLayout(element, mobilePreviewActive())) {
+  const contentOwnsAppearance = ['profile-card', 'social-links', 'widget', 'music'].includes(element.type);
   elementNode.style.left = `${layout.position.x}%`;
   elementNode.style.top = `${layout.position.y}%`;
   elementNode.style.width = `${layout.size.width}%`;
@@ -123,19 +124,19 @@ function applyGeometry(elementNode, element, layout = responsive.resolveElementL
   elementNode.style.transform = `translate(-50%, -50%) scale(${layout.scale}) rotate(${element.style.rotation || 0}deg)`;
   elementNode.style.textAlign = layout.alignment || '';
   elementNode.style.color = element.style.color || '';
-  elementNode.style.backgroundColor = ['profile-card', 'social-links'].includes(element.type) ? '' : (element.style.backgroundColor || '');
+  elementNode.style.backgroundColor = contentOwnsAppearance ? '' : (element.style.backgroundColor || '');
   elementNode.style.opacity = element.style.opacity ?? '';
-  elementNode.style.borderRadius = element.style.borderRadius !== undefined ? `${element.style.borderRadius}px` : '';
+  elementNode.style.borderRadius = !contentOwnsAppearance && element.style.borderRadius !== undefined ? `${element.style.borderRadius}px` : '';
   const selectionRadius = element.type === 'profile-card'
     ? state.configuration.profileCard.borderRadius
     : (element.type === 'music' ? 10 : (element.style.borderRadius || 0));
   elementNode.style.setProperty('--selection-radius', `${selectionRadius}px`);
   const previewRect = preview.getBoundingClientRect();
   if (previewRect.width && previewRect.height) elementNode.dataset.dimensions = `${Math.round(previewRect.width * layout.size.width * layout.scale / 100)} × ${Math.round(previewRect.height * layout.size.height * layout.scale / 100)} px`;
-  elementNode.style.boxShadow = element.style.shadow === 'strong'
+  elementNode.style.boxShadow = contentOwnsAppearance ? 'none' : (element.style.shadow === 'strong'
     ? '0 14px 28px rgba(0,0,0,.5)'
-    : (element.style.shadow === 'soft' ? '0 8px 18px rgba(0,0,0,.3)' : 'none');
-  if (element.style.glow) elementNode.style.boxShadow += ', 0 0 20px rgba(241,199,94,.45)';
+    : (element.style.shadow === 'soft' ? '0 8px 18px rgba(0,0,0,.3)' : 'none'));
+  if (!contentOwnsAppearance && element.style.glow) elementNode.style.boxShadow += ', 0 0 20px rgba(241,199,94,.45)';
 }
 
 function clearSnapGuides() {
@@ -305,6 +306,10 @@ function applyContentScale(elementNode, element, layout) {
   if (widget) {
     widget.style.fontSize = `${Math.round((element.style.fontSize || 11) * scale * 10) / 10}px`;
     widget.style.padding = `${Math.round(Math.max(2, Math.min(36, 9 * scale)))}px`;
+    widget.style.boxShadow = element.style.shadow === 'strong'
+      ? '0 14px 28px rgba(0,0,0,.5)'
+      : (element.style.shadow === 'soft' ? '0 8px 18px rgba(0,0,0,.3)' : 'none');
+    if (element.style.glow) widget.style.boxShadow += ', 0 0 20px rgba(241,199,94,.45)';
     const mediaSize = Math.max(10, Math.round(48 * scale));
     widget.querySelectorAll('.editor-widget-favorites figure').forEach((figure) => { figure.style.minWidth = `${mediaSize}px`; });
     widget.querySelectorAll('.editor-widget-favorites img').forEach((image) => { image.style.width = `${mediaSize}px`; image.style.height = `${mediaSize}px`; });
