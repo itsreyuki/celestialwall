@@ -31,10 +31,13 @@ function applyTextStyle(node, style, scale = 1) {
   node.style.fontFamily = style.fontFamily || 'Cairo'; node.style.fontSize = `${Math.round((style.fontSize || 16) * scale * 10) / 10}px`; node.style.fontWeight = style.fontWeight || '400'; node.style.color = style.color || ''; node.style.textAlign = style.textAlign || ''; node.style.letterSpacing = `${style.letterSpacing || 0}px`; node.style.lineHeight = String(style.lineHeight || 1.4); if (style.effect && style.effect !== 'none') node.classList.add(`effect-${style.effect}`);
 }
 function scaleWidget(node, element) {
-  const scale = elementVisualScale(element);
+  const rawScale = elementVisualScale(element);
+  const scale = element.widgetData?.kind === 'guestbook' ? Math.max(.88, Math.min(1.12, rawScale)) : rawScale;
   const mediaSize = Math.max(10, Math.round(48 * scale));
   node.style.fontSize = `${Math.round((element.style.fontSize || 11) * scale * 10) / 10}px`;
-  node.style.padding = `${Math.round(Math.max(2, Math.min(36, 9 * scale)))}px`;
+  node.style.padding = element.widgetData?.kind === 'guestbook'
+    ? `${Math.round(Math.max(7, Math.min(12, 9 * scale)))}px`
+    : `${Math.round(Math.max(2, Math.min(36, 9 * scale)))}px`;
   node.style.color = element.style.color || '';
   node.style.background = element.style.backgroundColor || '';
   node.style.borderRadius = `${element.style.borderRadius ?? 14}px`;
@@ -140,6 +143,7 @@ function guestbookWidget(page, element) {
   const icon = document.createElement('span'); icon.className = 'guestbook-icon'; icon.textContent = '✦'; icon.setAttribute('aria-hidden', 'true');
   const heading = document.createElement('span'); const title = document.createElement('strong'); title.textContent = 'سجل الزوار'; const subtitle = document.createElement('small'); subtitle.textContent = 'اترك أثرًا لطيفًا'; heading.append(title, subtitle); header.append(icon, heading);
   const list = document.createElement('div'); list.className = 'guestbook-list'; list.setAttribute('aria-live', 'polite');
+  const loading = document.createElement('p'); loading.className = 'guestbook-loading'; loading.textContent = 'جاري تحميل الرسائل…'; list.append(loading);
   const form = document.createElement('form'); const input = document.createElement('textarea'); input.maxLength = 500; input.rows = 2; input.placeholder = 'اكتب رسالة لطيفة…'; input.setAttribute('aria-label', 'رسالتك في سجل الزوار'); const submit = document.createElement('button'); submit.type = 'submit'; submit.textContent = 'إرسال ✦'; form.append(input, submit); node.append(header, list, form);
   let cursor = null; let canManage = false;
   const emptyState = () => { const empty = document.createElement('p'); empty.className = 'guestbook-empty'; empty.textContent = 'كن أول من يترك رسالة ✨'; return empty; };

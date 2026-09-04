@@ -203,11 +203,22 @@
 .editor-clock-face { display: grid; min-width: 0; }
 .editor-clock-face strong { color: #fff2bb; font-family: "Space Grotesk", monospace; font-size: 2em; font-variant-numeric: tabular-nums; letter-spacing: .04em; line-height: 1.05; }
 .editor-clock-face small { margin-top: .35em; overflow: hidden; color: #cbb9db; font-size: .68em; text-overflow: ellipsis; white-space: nowrap; }
-.editor-widget.widget-guestbook { align-content: center; justify-items: stretch; gap: .7em; border-color: rgba(210,149,240,.34); background: radial-gradient(circle at 90% 0, rgba(190,116,236,.22), transparent 44%), linear-gradient(155deg, rgba(32,20,52,.96), rgba(15,10,27,.94)); text-align: right; }
-.editor-guestbook-header { display: flex; align-items: center; gap: .6em; padding-bottom: .55em; border-bottom: 1px solid rgba(255,255,255,.09); color: #fff0bd; }
-.editor-guestbook-header b { display: grid; width: 2em; height: 2em; place-items: center; border-radius: .65em; color: #2d1b34; background: linear-gradient(145deg, #f5cd68, #c77eeb); }
-.editor-guestbook-message { color: #d9cde4; line-height: 1.55; }
-.editor-guestbook-action { border: 1px solid rgba(220,164,244,.22); border-radius: .75em; padding: .65em .75em; color: #a998b8; background: rgba(7,4,14,.42); font-size: .8em; }
+.editor-widget.widget-guestbook { grid-template-rows: auto minmax(0,1fr) auto; align-content: stretch; justify-items: stretch; gap: .65em; min-width: 0; min-height: 0; border-color: rgba(210,149,240,.34); background: radial-gradient(circle at 90% 0, rgba(190,116,236,.22), transparent 44%), linear-gradient(155deg, rgba(32,20,52,.96), rgba(15,10,27,.94)); text-align: right; container-type: size; }
+.editor-guestbook-header { display: flex; align-items: center; gap: .65em; min-width: 0; padding-bottom: .55em; border-bottom: 1px solid rgba(255,255,255,.09); color: #fff0bd; }
+.editor-guestbook-header > span { display: grid; min-width: 0; }
+.editor-guestbook-header small { margin-top: .18em; color: #bfaed1; font-size: .65em; }
+.editor-guestbook-header b { display: grid; width: 2em; height: 2em; place-items: center; flex: 0 0 auto; border-radius: .65em; color: #2d1b34; background: linear-gradient(145deg, #f5cd68, #c77eeb); }
+.editor-guestbook-list { display: grid; align-content: start; min-width: 0; min-height: 0; overflow: hidden; }
+.editor-guestbook-entry { display: flex; align-items: flex-start; gap: .55em; min-width: 0; border: 1px solid rgba(255,255,255,.09); border-radius: .75em; padding: .65em; background: linear-gradient(135deg, rgba(255,255,255,.065), rgba(255,255,255,.025)); }
+.editor-guestbook-entry > b { display: grid; width: 2em; height: 2em; place-items: center; flex: 0 0 auto; border: 1px solid rgba(255,237,174,.28); border-radius: 50%; color: #fff1be; background: linear-gradient(145deg, rgba(160,94,218,.72), rgba(86,48,123,.72)); }
+.editor-guestbook-entry > span { display: grid; min-width: 0; }
+.editor-guestbook-entry strong { color: #fff6df; font-size: .88em; }
+.editor-guestbook-entry span span { overflow: hidden; color: #d9cde4; line-height: 1.5; text-overflow: ellipsis; white-space: nowrap; }
+.editor-guestbook-action { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: .5em; border-top: 1px solid rgba(255,255,255,.08); padding-top: .55em; color: #a998b8; font-size: .8em; }
+.editor-guestbook-action > span { overflow: hidden; border: 1px solid rgba(220,164,244,.22); border-radius: .7em; padding: .58em .7em; background: rgba(7,4,14,.42); text-overflow: ellipsis; white-space: nowrap; }
+.editor-guestbook-action > b { border-radius: .7em; padding: .58em .85em; color: #2a1b35; background: linear-gradient(145deg, #f6d473, #c681e7); }
+@container (max-height: 150px) { .editor-widget.widget-guestbook { gap: .4em; } .editor-guestbook-header { padding-bottom: .35em; } .editor-guestbook-header small { display: none; } .editor-guestbook-header b { width: 1.7em; height: 1.7em; } .editor-guestbook-action { padding-top: .35em; } }
+@container (max-width: 250px) { .editor-guestbook-header small { display: none; } .editor-guestbook-action > b { padding-inline: .6em; } }
 .editor-widget blockquote, .editor-widget figure { margin: 0; }
 .editor-widget cite { color: #d9c9e8; font-size: .78em; }
 .editor-widget-favorites { display: flex; width: 100%; gap: .55em; overflow: hidden; }

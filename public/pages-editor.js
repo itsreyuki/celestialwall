@@ -304,8 +304,11 @@ function applyContentScale(elementNode, element, layout) {
 
   const widget = elementNode.querySelector('.editor-widget');
   if (widget) {
-    widget.style.fontSize = `${Math.round((element.style.fontSize || 11) * scale * 10) / 10}px`;
-    widget.style.padding = `${Math.round(Math.max(2, Math.min(36, 9 * scale)))}px`;
+    const widgetScale = element.widgetData?.kind === 'guestbook' ? Math.max(.88, Math.min(1.12, scale)) : scale;
+    widget.style.fontSize = `${Math.round((element.style.fontSize || 11) * widgetScale * 10) / 10}px`;
+    widget.style.padding = element.widgetData?.kind === 'guestbook'
+      ? `${Math.round(Math.max(7, Math.min(12, 9 * widgetScale)))}px`
+      : `${Math.round(Math.max(2, Math.min(36, 9 * widgetScale)))}px`;
     widget.style.boxShadow = element.style.shadow === 'strong'
       ? '0 14px 28px rgba(0,0,0,.5)'
       : (element.style.shadow === 'soft' ? '0 8px 18px rgba(0,0,0,.3)' : 'none');
@@ -419,9 +422,12 @@ function widgetPreview(element) {
   const node = document.createElement('div');
   node.className = `editor-widget widget-${data.kind}`;
   const layout = responsive.resolveElementLayout(element, mobilePreviewActive());
-  const scale = elementScale(element, layout);
+  const rawScale = elementScale(element, layout);
+  const scale = data.kind === 'guestbook' ? Math.max(.88, Math.min(1.12, rawScale)) : rawScale;
   node.style.fontSize = `${Math.round((element.style.fontSize || 11) * scale * 10) / 10}px`;
-  node.style.padding = `${Math.round(Math.max(2, Math.min(36, 9 * scale)))}px`;
+  node.style.padding = data.kind === 'guestbook'
+    ? `${Math.round(Math.max(7, Math.min(12, 9 * scale)))}px`
+    : `${Math.round(Math.max(2, Math.min(36, 9 * scale)))}px`;
   node.style.color = element.style.color || '';
   node.style.background = element.style.backgroundColor || '';
   node.style.borderRadius = `${element.style.borderRadius ?? 12}px`;
@@ -513,16 +519,35 @@ function widgetPreview(element) {
     header.className = 'editor-guestbook-header';
     const icon = document.createElement('b');
     icon.textContent = '✦';
+    const heading = document.createElement('span');
     const title = document.createElement('strong');
     title.textContent = 'سجل الزوار';
-    header.append(icon, title);
+    const subtitle = document.createElement('small');
+    subtitle.textContent = 'اترك أثرًا لطيفًا';
+    heading.append(title, subtitle);
+    header.append(icon, heading);
+    const list = document.createElement('span');
+    list.className = 'editor-guestbook-list';
+    const entry = document.createElement('span');
+    entry.className = 'editor-guestbook-entry';
+    const avatar = document.createElement('b');
+    avatar.textContent = 'C';
+    const comment = document.createElement('span');
+    const author = document.createElement('strong');
+    author.textContent = 'Celestia';
     const message = document.createElement('span');
-    message.className = 'editor-guestbook-message';
     message.textContent = data.text;
+    comment.append(author, message);
+    entry.append(avatar, comment);
+    list.append(entry);
     const action = document.createElement('span');
     action.className = 'editor-guestbook-action';
-    action.textContent = 'اكتب رسالة لطيفة…';
-    node.append(header, message, action);
+    const placeholder = document.createElement('span');
+    placeholder.textContent = 'اكتب رسالة لطيفة…';
+    const send = document.createElement('b');
+    send.textContent = 'إرسال';
+    action.append(placeholder, send);
+    node.append(header, list, action);
   }
   return node;
 }

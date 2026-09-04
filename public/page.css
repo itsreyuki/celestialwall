@@ -90,14 +90,14 @@ body .widget-gallery figcaption { padding: .3em; font-size: .65em; }
 body .widget-poll { align-content: center; gap: .4em; }
 body .widget-poll button { width: 100%; border: 1px solid rgba(245,206,107,.28); border-radius: .55em; padding: .35em .5em; color: inherit; background: rgba(255,255,255,.05); cursor: pointer; }
 body .widget-poll button:disabled { opacity: .58; cursor: default; }
-body .widget-guestbook { grid-template-rows: auto minmax(0, 1fr) auto; align-content: stretch; justify-items: stretch; gap: .8em; overflow: hidden; border-color: rgba(211,151,242,.3); background: radial-gradient(circle at 90% 0, rgba(192,117,238,.2), transparent 42%), linear-gradient(155deg, rgba(31,19,51,.94), rgba(15,10,27,.9)); box-shadow: inset 0 1px rgba(255,255,255,.08), 0 .8em 2em rgba(0,0,0,.2); text-align: right; }
-body .guestbook-header { display: flex; align-items: center; gap: .7em; padding-bottom: .65em; border-bottom: 1px solid rgba(255,255,255,.09); }
+body .widget-guestbook { grid-template-rows: auto minmax(0, 1fr) auto; align-content: stretch; justify-items: stretch; gap: .65em; min-width: 0; min-height: 0; overflow: hidden; border-color: rgba(211,151,242,.3); background: radial-gradient(circle at 90% 0, rgba(192,117,238,.2), transparent 42%), linear-gradient(155deg, rgba(31,19,51,.96), rgba(15,10,27,.94)); box-shadow: inset 0 1px rgba(255,255,255,.08), 0 .8em 2em rgba(0,0,0,.2); text-align: right; container-type: size; }
+body .guestbook-header { display: flex; align-items: center; gap: .65em; min-width: 0; padding-bottom: .55em; border-bottom: 1px solid rgba(255,255,255,.09); }
 body .guestbook-header > span:last-child { display: grid; min-width: 0; }
-body .guestbook-header strong { color: #fff0bd; font-size: 1.05em; }
-body .guestbook-header small { color: #bfaed1; font-size: .68em; }
-body .guestbook-icon { display: grid; width: 2.25em; height: 2.25em; place-items: center; flex: 0 0 auto; border-radius: .75em; color: #2d1b34; background: linear-gradient(145deg, #f5cd68, #c77eeb); box-shadow: 0 .35em 1em rgba(0,0,0,.22); }
-body .guestbook-list { display: grid; align-content: start; gap: .65em; min-height: 3.5em; overflow: auto; scrollbar-width: thin; scrollbar-color: rgba(239,196,93,.4) transparent; }
-body .guestbook-entry { position: relative; border: 1px solid rgba(255,255,255,.09); border-radius: .85em; padding: .75em; background: rgba(255,255,255,.045); box-shadow: inset 0 1px rgba(255,255,255,.035); }
+body .guestbook-header strong { color: #fff0bd; font-size: 1em; line-height: 1.2; }
+body .guestbook-header small { margin-top: .18em; color: #bfaed1; font-size: .65em; }
+body .guestbook-icon { display: grid; width: 2em; height: 2em; place-items: center; flex: 0 0 auto; border-radius: .65em; color: #2d1b34; background: linear-gradient(145deg, #f5cd68, #c77eeb); box-shadow: 0 .35em 1em rgba(0,0,0,.22); }
+body .guestbook-list { display: grid; align-content: start; gap: .55em; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; padding-inline-end: .15em; scrollbar-width: thin; scrollbar-color: rgba(239,196,93,.4) transparent; }
+body .guestbook-entry { position: relative; min-width: 0; border: 1px solid rgba(255,255,255,.09); border-radius: .75em; padding: .65em; background: linear-gradient(135deg, rgba(255,255,255,.065), rgba(255,255,255,.025)); box-shadow: inset 0 1px rgba(255,255,255,.04); }
 body .guestbook-entry > header { display: flex; align-items: center; gap: .55em; }
 body .guestbook-entry > header > span:nth-child(2) { display: grid; min-width: 0; }
 body .guestbook-avatar { display: grid; width: 2.15em; height: 2.15em; place-items: center; flex: 0 0 auto; border: 1px solid rgba(255,237,174,.28); border-radius: 50%; color: #fff1be; background: linear-gradient(145deg, rgba(160,94,218,.72), rgba(86,48,123,.72)); font-weight: 800; }
@@ -105,17 +105,19 @@ body .guestbook-entry header strong { overflow: hidden; color: #fff6df; font-siz
 body .guestbook-entry header time { color: #ad9abe; font-size: .66em; }
 body .guestbook-pin { margin-right: auto; border: 1px solid rgba(245,206,107,.2); border-radius: 999px; padding: .2em .55em; color: #f6d77d; background: rgba(245,206,107,.08); white-space: nowrap; }
 body .guestbook-entry.is-hidden { opacity: .45; }
-body .guestbook-entry p { margin: .65em 0 0; color: #e8dff0; line-height: 1.65; white-space: pre-wrap; }
+body .guestbook-entry p { overflow-wrap: anywhere; margin: .5em 0 0; color: #e8dff0; line-height: 1.55; white-space: pre-wrap; }
 body .guestbook-controls { display: flex; flex-wrap: wrap; gap: .35em; margin-top: .65em; }
 body .guestbook-entry button, body .guestbook-more { border: 1px solid rgba(245,206,107,.2); border-radius: 999px; padding: .35em .65em; color: #f9df95; background: rgba(245,206,107,.08); font: inherit; font-size: .68em; cursor: pointer; }
 body .owner-reply { border-right: 2px solid #d69bf0; border-radius: 0 .45em .45em 0; padding: .55em .7em; color: #f1ddff !important; background: rgba(202,132,238,.08); }
-body .guestbook-empty { align-self: center; margin: 0; color: #bba9ca; text-align: center; }
-body .widget-guestbook form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .55em; padding-top: .7em; border-top: 1px solid rgba(255,255,255,.08); }
-body .widget-guestbook textarea { min-height: 3.4em; max-height: 8em; resize: vertical; border: 1px solid rgba(220,164,244,.24); border-radius: .8em; padding: .7em .8em; outline: none; color: #fff7e5; background: rgba(7,4,14,.46); font: inherit; }
+body .guestbook-empty, body .guestbook-loading { align-self: center; margin: auto; color: #bba9ca; text-align: center; }
+body .widget-guestbook form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5em; min-width: 0; padding-top: .55em; border-top: 1px solid rgba(255,255,255,.08); }
+body .widget-guestbook textarea { min-width: 0; min-height: 2.65em; max-height: 5em; resize: none; border: 1px solid rgba(220,164,244,.24); border-radius: .7em; padding: .58em .7em; outline: none; color: #fff7e5; background: rgba(7,4,14,.46); font: inherit; }
 body .widget-guestbook textarea:focus { border-color: rgba(245,206,107,.65); box-shadow: 0 0 0 3px rgba(245,206,107,.09); }
-body .widget-guestbook form button { align-self: stretch; border: 0; border-radius: .8em; padding: .7em 1em; color: #2a1b35; background: linear-gradient(145deg, #f6d473, #c681e7); box-shadow: 0 .4em 1em rgba(0,0,0,.2); font-weight: 800; cursor: pointer; }
+body .widget-guestbook form button { align-self: stretch; border: 0; border-radius: .7em; padding: .55em .85em; color: #2a1b35; background: linear-gradient(145deg, #f6d473, #c681e7); box-shadow: 0 .4em 1em rgba(0,0,0,.2); font-weight: 800; cursor: pointer; }
 body .widget-guestbook form button:disabled { opacity: .55; cursor: wait; }
 body .widget-guestbook[data-error]::after { content: attr(data-error); color: #ffb8c7; font-size: .7em; }
+@container (max-height: 150px) { body .widget-guestbook { gap: .4em; } body .guestbook-header { padding-bottom: .35em; } body .guestbook-header small { display: none; } body .guestbook-icon { width: 1.7em; height: 1.7em; } body .widget-guestbook form { padding-top: .35em; } }
+@container (max-width: 250px) { body .guestbook-header small { display: none; } body .widget-guestbook form button { padding-inline: .6em; } }
 body .public-layout .public-brand { position: absolute; z-index: 40; right: 18px; bottom: 16px; margin: 0; color: #eadcf7; font-family: "Space Grotesk", sans-serif; font-size: 10px; letter-spacing: 1.4px; text-decoration: none; }
 body .celestia-player { position: absolute; z-index: 35; right: 18px; bottom: 44px; display: grid; grid-template-areas: "controls details cover"; grid-template-columns: auto minmax(72px, 1fr) 44px; width: min(360px, calc(100% - 36px)); min-width: 0; gap: 7px 9px; align-items: center; align-content: center; overflow: hidden; border: 1px solid rgba(245,206,107,.32); border-radius: 14px; padding: 7px; color: #fff8e6; background: radial-gradient(circle at 0 0, rgba(166,101,224,.2), transparent 42%), rgba(18,11,32,.9); box-shadow: 0 10px 28px rgba(0,0,0,.34), inset 0 1px rgba(255,255,255,.07); backdrop-filter: blur(16px); container-type: inline-size; }
 body .player-cover { grid-area: cover; display: block; width: 44px; height: 44px; border: 1px solid rgba(255,255,255,.1); border-radius: 9px; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,.28); }
