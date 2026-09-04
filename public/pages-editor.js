@@ -185,14 +185,15 @@ function renderBackground() {
     : (background.color || '#100d1d');
   preview.append(layer);
   if (background.asset?.url) {
-    const media = background.type === 'video' ? document.createElement('video') : document.createElement('img');
+    const isVideo = background.type === 'video';
+    const media = isVideo ? document.createElement('video') : document.createElement('div');
     media.className = 'preview-background-media';
-    media.src = background.asset.url;
-    media.style.objectFit = background.asset.fit || 'cover';
-    media.style.objectPosition = assetPosition(background.asset);
     media.style.filter = `blur(${background.blur}px) brightness(${background.brightness})`;
     if (background.blur) media.style.transform = 'scale(1.05)';
-    if (media instanceof HTMLVideoElement) {
+    if (isVideo) {
+      media.src = background.asset.url;
+      media.style.objectFit = background.asset.fit || 'cover';
+      media.style.objectPosition = assetPosition(background.asset);
       media.muted = true;
       media.loop = true;
       media.autoplay = preview.dataset.mode !== 'mobile';
@@ -200,7 +201,10 @@ function renderBackground() {
       media.playsInline = true;
       if (media.autoplay) media.play().catch(() => undefined);
     } else {
-      media.alt = '';
+      media.style.backgroundImage = `url(${JSON.stringify(background.asset.url)})`;
+      media.style.backgroundPosition = assetPosition(background.asset);
+      media.style.backgroundRepeat = 'no-repeat';
+      media.style.backgroundSize = background.asset.fit || 'cover';
     }
     preview.append(media);
   }

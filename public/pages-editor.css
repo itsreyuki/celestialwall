@@ -173,7 +173,7 @@
 .design-controls .switch-field input { width: auto; accent-color: #efc45d; }
 
 .preview-background, .preview-background-media, .preview-background-overlay, .preview-background-vignette, .preview-background-grain { position: absolute; inset: 0; pointer-events: none; }
-.preview-background-media { width: 100%; height: 100%; object-fit: cover; }
+.preview-background-media { width: 100%; height: 100%; object-fit: cover; background-repeat: no-repeat; }
 .preview-background-overlay { background: var(--overlay-color, #000); opacity: var(--overlay-opacity, 0); }
 .preview-background-vignette { background: radial-gradient(circle, transparent 45%, rgba(0,0,0,var(--vignette,0)) 100%); }
 .preview-background-grain { opacity: var(--grain,0); background-image: radial-gradient(rgba(255,255,255,.48) .6px, transparent .7px); background-size: 4px 4px; mix-blend-mode: soft-light; }

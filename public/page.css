@@ -20,11 +20,11 @@ body .public-layout { position: relative; width: 100%; height: 100vh; height: 10
 body .public-stage { position: absolute; top: 50%; left: 50%; width: 920px; height: 575px; overflow: hidden; border: 1px solid rgba(255,255,255,.1); border-radius: 18px; background: #100d1d; box-shadow: 0 25px 70px rgba(0,0,0,.5); transform: translate(-50%, -50%); transform-origin: center; }
 body .public-background, body .public-background-media, body .public-background-overlay, body .public-background-vignette, body .public-background-grain { position: absolute; inset: 0; }
 body .public-background { z-index: 0; }
-body .public-background-media { width: 100%; height: 100%; object-fit: cover; }
+body .public-background-media { width: 100%; height: 100%; object-fit: cover; background-repeat: no-repeat; }
 body .public-background-overlay, body .public-background-vignette, body .public-background-grain { pointer-events: none; }
 body .public-background-vignette { background: radial-gradient(circle, transparent 45%, rgba(0,0,0,var(--vignette,0)) 100%); }
 body .public-background-grain { background-image: radial-gradient(rgba(255,255,255,.48) .6px, transparent .7px); background-size: 4px 4px; mix-blend-mode: soft-light; }
-body .public-element { position: absolute; display: grid; min-width: 24px; min-height: 24px; }
+body .public-element { position: absolute; display: grid; min-width: 24px; min-height: 24px; border: 0; outline: 0; background: transparent; }
 body .public-tab-content { position: absolute; z-index: 2; inset: 0; }
 body .public-tab-content.transition-fade .public-element:not([hidden]) { animation: tab-fade .28s ease both; }
 body .public-tab-content.transition-slide .public-element:not([hidden]) { animation: tab-slide .3s ease both; }
@@ -38,7 +38,7 @@ body .page-reactions button[aria-pressed="true"] { border-color: #f3c860; backgr
 body .page-remix { position: absolute; z-index: 36; bottom: 86px; left: 18px; display: grid; gap: 3px; }
 body .page-remix button { border: 1px solid rgba(214,155,240,.4); border-radius: 999px; padding: 7px 11px; color: #fff3ff; background: rgba(39,20,61,.8); cursor: pointer; font: inherit; backdrop-filter: blur(10px); }
 body .page-remix small { color: #dbc9eb; font-size: 10px; text-align: center; }
-body .public-profile-card { display: grid; justify-items: center; align-content: center; width: 100%; height: 100%; overflow: hidden; border-style: solid; color: #fff8e6; }
+body .public-profile-card { display: grid; justify-items: center; align-content: center; width: 100%; height: 100%; overflow: hidden; outline: 0; border-style: solid; color: #fff8e6; }
 body .public-profile-card h1 { margin: 8px 0 2px; font-size: clamp(18px, 2.4vw, 30px); }
 body .public-profile-card .public-bio { max-width: 90%; margin: 0; color: #d8cae8; font-size: clamp(10px, 1.3vw, 15px); line-height: 1.7; white-space: pre-wrap; }
 body .public-profile-card .public-avatar { display: grid; place-items: center; overflow: hidden; margin: 0; border-style: solid; color: #2d1d34; background: linear-gradient(135deg, #ffefb3, #b978e9); font-family: "Space Grotesk", sans-serif; font-size: 36px; font-weight: 800; }

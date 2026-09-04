@@ -70,7 +70,20 @@ function mediaElement(asset, video = false, lazy = false, mobile = false) {
 function createBackground(configuration) {
   const background = configuration.background; const holder = document.createElement('div'); holder.className = 'public-background';
   holder.style.background = background.type === 'gradient' ? `linear-gradient(${background.gradient?.angle ?? 135}deg, ${background.gradient?.from || '#100d1d'}, ${background.gradient?.to || '#42266f'})` : (background.color || '#100d1d');
-  if (background.asset?.url) { const media = mediaElement(background.asset, background.type === 'video', false, mobileViewport()); media.className = 'public-background-media'; media.style.filter = `blur(${background.blur}px) brightness(${background.brightness})`; if (background.blur) media.style.transform = 'scale(1.05)'; holder.append(media); }
+  if (background.asset?.url) {
+    const isVideo = background.type === 'video';
+    const media = isVideo ? mediaElement(background.asset, true, false, mobileViewport()) : document.createElement('div');
+    media.className = 'public-background-media';
+    if (!isVideo) {
+      media.style.backgroundImage = `url(${JSON.stringify(background.asset.url)})`;
+      media.style.backgroundPosition = assetPosition(background.asset);
+      media.style.backgroundRepeat = 'no-repeat';
+      media.style.backgroundSize = background.asset.fit || 'cover';
+    }
+    media.style.filter = `blur(${background.blur}px) brightness(${background.brightness})`;
+    if (background.blur) media.style.transform = 'scale(1.05)';
+    holder.append(media);
+  }
   const overlay = document.createElement('div'); overlay.className = 'public-background-overlay'; overlay.style.background = background.overlayColor || '#000000'; overlay.style.opacity = String(background.overlayOpacity || 0);
   const vignette = document.createElement('div'); vignette.className = 'public-background-vignette'; vignette.style.setProperty('--vignette', String(background.vignette || 0));
   const grain = document.createElement('div'); grain.className = 'public-background-grain'; grain.style.opacity = String(background.grain || 0);
