@@ -203,8 +203,8 @@
 .editor-clock-face { display: grid; min-width: 0; }
 .editor-clock-face strong { color: #fff2bb; font-family: "Space Grotesk", monospace; font-size: 2em; font-variant-numeric: tabular-nums; letter-spacing: .04em; line-height: 1.05; }
 .editor-clock-face small { margin-top: .35em; overflow: hidden; color: #cbb9db; font-size: .68em; text-overflow: ellipsis; white-space: nowrap; }
-.editor-widget.widget-guestbook { grid-template-rows: auto minmax(0,1fr) auto; align-content: stretch; justify-items: stretch; gap: .65em; min-width: 0; min-height: 0; border-color: rgba(210,149,240,.34); background: radial-gradient(circle at 90% 0, rgba(190,116,236,.22), transparent 44%), linear-gradient(155deg, rgba(32,20,52,.96), rgba(15,10,27,.94)); text-align: right; container-type: size; }
-.editor-guestbook-header { display: flex; align-items: center; gap: .65em; min-width: 0; padding-bottom: .55em; border-bottom: 1px solid rgba(255,255,255,.09); color: #fff0bd; }
+.editor-widget.widget-guestbook { grid-template-rows: clamp(24px, 5cqh, 28px) minmax(0,1fr) clamp(38px, 10cqh, 50px); align-content: stretch; justify-items: stretch; gap: .65em; min-width: 0; min-height: 0; border-color: rgba(210,149,240,.34); background: radial-gradient(circle at 90% 0, rgba(190,116,236,.22), transparent 44%), linear-gradient(155deg, rgba(32,20,52,.96), rgba(15,10,27,.94)); text-align: right; container-type: size; }
+.editor-guestbook-header { display: flex; align-items: center; gap: .65em; min-width: 0; min-height: 0; overflow: hidden; padding-bottom: .35em; border-bottom: 1px solid rgba(255,255,255,.09); color: #fff0bd; }
 .editor-guestbook-header > span { display: grid; min-width: 0; }
 .editor-guestbook-header small { margin-top: .18em; color: #bfaed1; font-size: .65em; }
 .editor-guestbook-header b { display: grid; width: 2em; height: 2em; place-items: center; flex: 0 0 auto; border-radius: .65em; color: #2d1b34; background: linear-gradient(145deg, #f5cd68, #c77eeb); }
@@ -214,25 +214,25 @@
 .editor-guestbook-entry > span { display: grid; min-width: 0; }
 .editor-guestbook-entry strong { color: #fff6df; font-size: .88em; }
 .editor-guestbook-entry span span { overflow: hidden; color: #d9cde4; line-height: 1.5; text-overflow: ellipsis; white-space: nowrap; }
-.editor-guestbook-action { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: .5em; border-top: 1px solid rgba(255,255,255,.08); padding-top: .55em; color: #a998b8; font-size: .8em; }
+.editor-guestbook-action { display: grid; height: 100%; grid-template-columns: minmax(0,1fr) auto; align-items: stretch; gap: .5em; min-height: 0; border-top: 1px solid rgba(255,255,255,.08); padding-top: .35em; color: #a998b8; font-size: .8em; }
 .editor-guestbook-action > span { overflow: hidden; border: 1px solid rgba(220,164,244,.22); border-radius: .7em; padding: .58em .7em; background: rgba(7,4,14,.42); text-overflow: ellipsis; white-space: nowrap; }
 .editor-guestbook-action > b { border-radius: .7em; padding: .58em .85em; color: #2a1b35; background: linear-gradient(145deg, #f6d473, #c681e7); }
 @container (max-height: 150px) { .editor-widget.widget-guestbook { gap: .4em; } .editor-guestbook-header { padding-bottom: .35em; } .editor-guestbook-header small { display: none; } .editor-guestbook-header b { width: 1.7em; height: 1.7em; } .editor-guestbook-action { padding-top: .35em; } }
 @container (max-width: 250px) { .editor-guestbook-header small { display: none; } .editor-guestbook-action > b { padding-inline: .6em; } }
 .editor-widget blockquote, .editor-widget figure { margin: 0; }
 .editor-widget cite { color: #d9c9e8; font-size: .78em; }
-.editor-widget-favorites { display: flex; width: 100%; gap: .55em; overflow: hidden; }
-.editor-widget-favorites figure { min-width: 48px; overflow: hidden; border-radius: .7em; background: rgba(255,255,255,.06); }
-.editor-widget-favorites img { display: block; width: 48px; height: 48px; object-fit: cover; }
+.editor-widget-favorites { display: grid; width: 100%; max-height: 100%; grid-template-columns: repeat(auto-fill, var(--favorite-card-size, 48px)); align-content: start; justify-content: center; gap: .55em; overflow: hidden; }
+.editor-widget-favorites figure { width: var(--favorite-card-size, 48px); overflow: hidden; border-radius: .7em; background: rgba(255,255,255,.06); }
+.editor-widget-favorites img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }
 .editor-widget-favorites figcaption { overflow: hidden; padding: .35em; font-size: .7em; text-overflow: ellipsis; white-space: nowrap; }
 .editor-widget-gallery { width: 100%; max-height: 100%; overflow: hidden; gap: .45em; }
-.editor-widget-gallery.layout-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); }
-.editor-widget-gallery.layout-polaroid { display: flex; overflow: hidden; }
-.editor-widget-gallery.layout-masonry { columns: 2; }
+.editor-widget-gallery.layout-grid { display: grid; grid-template-columns: repeat(auto-fill, var(--gallery-card-size, 76px)); align-content: start; justify-content: center; }
+.editor-widget-gallery.layout-polaroid { display: flex; align-content: flex-start; justify-content: center; flex-wrap: wrap; overflow: hidden; }
+.editor-widget-gallery.layout-masonry { column-width: var(--gallery-card-size, 76px); }
 .editor-widget-gallery figure { overflow: hidden; margin-bottom: .45em; border-radius: .45em; background: #fff4de; color: #2c1d37; break-inside: avoid; }
-.editor-widget-gallery.layout-polaroid figure { flex: 0 0 115px; padding: 5px 5px 17px; transform: rotate(-2deg); }
+.editor-widget-gallery.layout-polaroid figure { flex: 0 0 var(--gallery-card-size, 76px); padding: 5px 5px 17px; transform: rotate(-2deg); }
 .editor-widget-gallery.layout-polaroid figure:nth-child(even) { transform: rotate(2deg); }
-.editor-widget-gallery img { display: block; width: 100%; min-height: 42px; max-height: 110px; object-fit: cover; }
+.editor-widget-gallery img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }
 .editor-widget-gallery figcaption { padding: .3em; font-size: .65em; }
 .editor-widget.widget-poll { align-content: center; gap: .4em; }
 .editor-poll-option { width: 100%; border: 1px solid rgba(245,206,107,.28); border-radius: .55em; padding: .35em .5em; background: rgba(255,255,255,.05); }

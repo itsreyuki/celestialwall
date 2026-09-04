@@ -25,15 +25,15 @@ function geometry(node, element) {
   if (!contentOwnsAppearance && element.style.glow) node.style.boxShadow += ', 0 0 20px rgba(241,199,94,.45)';
 }
 function elementVisualScale(element) {
-  return window.CelestiaPageResponsive.elementVisualScale(element, mobileViewport());
+  return window.CelestiaPageResponsive.contentVisualScale(element, mobileViewport());
 }
 function applyTextStyle(node, style, scale = 1) {
   node.style.fontFamily = style.fontFamily || 'Cairo'; node.style.fontSize = `${Math.round((style.fontSize || 16) * scale * 10) / 10}px`; node.style.fontWeight = style.fontWeight || '400'; node.style.color = style.color || ''; node.style.textAlign = style.textAlign || ''; node.style.letterSpacing = `${style.letterSpacing || 0}px`; node.style.lineHeight = String(style.lineHeight || 1.4); if (style.effect && style.effect !== 'none') node.classList.add(`effect-${style.effect}`);
 }
 function scaleWidget(node, element) {
-  const rawScale = elementVisualScale(element);
-  const scale = element.widgetData?.kind === 'guestbook' ? Math.max(.88, Math.min(1.12, rawScale)) : rawScale;
+  const scale = elementVisualScale(element);
   const mediaSize = Math.max(10, Math.round(48 * scale));
+  const gallerySize = Math.max(34, Math.round(76 * scale));
   node.style.fontSize = `${Math.round((element.style.fontSize || 11) * scale * 10) / 10}px`;
   node.style.padding = element.widgetData?.kind === 'guestbook'
     ? `${Math.round(Math.max(7, Math.min(12, 9 * scale)))}px`
@@ -43,9 +43,8 @@ function scaleWidget(node, element) {
   node.style.borderRadius = `${element.style.borderRadius ?? 14}px`;
   node.style.boxShadow = element.style.shadow === 'strong' ? '0 14px 28px rgba(0,0,0,.5)' : (element.style.shadow === 'soft' ? '0 8px 18px rgba(0,0,0,.3)' : 'none');
   if (element.style.glow) node.style.boxShadow += ', 0 0 20px rgba(241,199,94,.45)';
-  node.querySelectorAll('.widget-favorites figure').forEach((figure) => { figure.style.minWidth = `${mediaSize}px`; });
-  node.querySelectorAll('.widget-favorites img').forEach((image) => { image.style.width = `${mediaSize}px`; image.style.height = `${mediaSize}px`; });
-  node.querySelectorAll('.widget-gallery img').forEach((image) => { image.style.minHeight = `${Math.max(8, Math.round(42 * scale))}px`; image.style.maxHeight = `${Math.max(18, Math.round(110 * scale))}px`; });
+  node.style.setProperty('--favorite-card-size', `${mediaSize}px`);
+  node.style.setProperty('--gallery-card-size', `${gallerySize}px`);
 }
 
 function fitDesignStage(layout, stage, mobile) {

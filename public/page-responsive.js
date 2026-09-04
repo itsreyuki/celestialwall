@@ -13,6 +13,18 @@
     music: [35, 11]
   });
 
+  const CONTENT_SCALE_LIMITS = Object.freeze({
+    'profile-card': 1.25,
+    'social-links': 1.15,
+    music: 1.15,
+    widget: 1.2,
+    'widget:characters': 1.08,
+    'widget:games': 1.08,
+    'widget:gallery': 1.08,
+    'widget:guestbook': 1.05,
+    'widget:poll': 1.12
+  });
+
   function resolveElementLayout(element, mobile) {
     const overrides = mobile ? (element.mobileOverrides || {}) : {};
     const position = overrides.mobilePosition || overrides.position || element.position;
@@ -36,6 +48,13 @@
     return Math.max(.15, Math.min(4, scale));
   }
 
+  function contentVisualScale(element, mobile, resolvedLayout = resolveElementLayout(element, mobile)) {
+    const visualScale = elementVisualScale(element, mobile, resolvedLayout);
+    const widgetKey = element.type === 'widget' ? `widget:${element.widgetData?.kind || ''}` : '';
+    const limit = CONTENT_SCALE_LIMITS[widgetKey] || CONTENT_SCALE_LIMITS[element.type];
+    return limit ? Math.min(visualScale, limit) : visualScale;
+  }
+
   function fitDesignViewport(availableWidth, availableHeight, mobile) {
     const viewport = mobile ? DESIGN_VIEWPORTS.mobile : DESIGN_VIEWPORTS.desktop;
     const width = Math.max(1, Number(availableWidth) || viewport.width);
@@ -44,7 +63,7 @@
     return { ...viewport, scale, renderedWidth: viewport.width * scale, renderedHeight: viewport.height * scale };
   }
 
-  const api = { DESIGN_VIEWPORTS, ELEMENT_BASE_SIZES, resolveElementLayout, elementVisualScale, fitDesignViewport };
+  const api = { DESIGN_VIEWPORTS, ELEMENT_BASE_SIZES, CONTENT_SCALE_LIMITS, resolveElementLayout, elementVisualScale, contentVisualScale, fitDesignViewport };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) root.CelestiaPageResponsive = api;
 }(typeof window !== 'undefined' ? window : globalThis));

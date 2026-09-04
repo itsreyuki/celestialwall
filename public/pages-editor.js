@@ -248,7 +248,7 @@ function renderEntrancePreview() {
 }
 
 function elementScale(element, layout) {
-  return responsive.elementVisualScale(element, mobilePreviewActive(), layout);
+  return responsive.contentVisualScale(element, mobilePreviewActive(), layout);
 }
 
 function elementFontSize(element, mobile = mobilePreviewActive()) {
@@ -304,8 +304,8 @@ function applyContentScale(elementNode, element, layout) {
 
   const widget = elementNode.querySelector('.editor-widget');
   if (widget) {
-    const widgetScale = element.widgetData?.kind === 'guestbook' ? Math.max(.88, Math.min(1.12, scale)) : scale;
-    widget.style.fontSize = `${Math.round((element.style.fontSize || 11) * widgetScale * 10) / 10}px`;
+    const widgetScale = scale;
+    widget.style.fontSize = `${Math.round((element.style.fontSize || 11) * scale * 10) / 10}px`;
     widget.style.padding = element.widgetData?.kind === 'guestbook'
       ? `${Math.round(Math.max(7, Math.min(12, 9 * widgetScale)))}px`
       : `${Math.round(Math.max(2, Math.min(36, 9 * widgetScale)))}px`;
@@ -313,10 +313,8 @@ function applyContentScale(elementNode, element, layout) {
       ? '0 14px 28px rgba(0,0,0,.5)'
       : (element.style.shadow === 'soft' ? '0 8px 18px rgba(0,0,0,.3)' : 'none');
     if (element.style.glow) widget.style.boxShadow += ', 0 0 20px rgba(241,199,94,.45)';
-    const mediaSize = Math.max(10, Math.round(48 * scale));
-    widget.querySelectorAll('.editor-widget-favorites figure').forEach((figure) => { figure.style.minWidth = `${mediaSize}px`; });
-    widget.querySelectorAll('.editor-widget-favorites img').forEach((image) => { image.style.width = `${mediaSize}px`; image.style.height = `${mediaSize}px`; });
-    widget.querySelectorAll('.editor-widget-gallery img').forEach((image) => { image.style.minHeight = `${Math.max(8, Math.round(42 * scale))}px`; image.style.maxHeight = `${Math.max(18, Math.round(110 * scale))}px`; });
+    widget.style.setProperty('--favorite-card-size', `${Math.max(10, Math.round(48 * scale))}px`);
+    widget.style.setProperty('--gallery-card-size', `${Math.max(34, Math.round(76 * scale))}px`);
   }
 
   const music = elementNode.querySelector('.editor-music');
@@ -422,8 +420,7 @@ function widgetPreview(element) {
   const node = document.createElement('div');
   node.className = `editor-widget widget-${data.kind}`;
   const layout = responsive.resolveElementLayout(element, mobilePreviewActive());
-  const rawScale = elementScale(element, layout);
-  const scale = data.kind === 'guestbook' ? Math.max(.88, Math.min(1.12, rawScale)) : rawScale;
+  const scale = elementScale(element, layout);
   node.style.fontSize = `${Math.round((element.style.fontSize || 11) * scale * 10) / 10}px`;
   node.style.padding = data.kind === 'guestbook'
     ? `${Math.round(Math.max(7, Math.min(12, 9 * scale)))}px`

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { DESIGN_VIEWPORTS, resolveElementLayout, elementVisualScale, fitDesignViewport } = require('../public/page-responsive');
+const { DESIGN_VIEWPORTS, resolveElementLayout, elementVisualScale, contentVisualScale, fitDesignViewport } = require('../public/page-responsive');
 
 test('responsive layout preserves desktop values when no mobile override exists', () => {
   const element = { position: { x: 25, y: 30 }, size: { width: 40, height: 20 }, visible: true };
@@ -26,6 +26,15 @@ test('visual content scale follows both element dimensions', () => {
   assert.equal(elementVisualScale(element, false), 2);
   element.size = { width: 76, height: 16 };
   assert.equal(Math.round(elementVisualScale(element, false) * 1000) / 1000, 1.414);
+});
+
+test('content-heavy elements stop scaling and use extra room for content', () => {
+  const games = { type: 'widget', position: { x: 50, y: 50 }, size: { width: 152, height: 64 }, visible: true, widgetData: { kind: 'games' } };
+  const guestbook = { ...games, widgetData: { kind: 'guestbook' } };
+  const image = { ...games, type: 'image', widgetData: undefined };
+  assert.equal(contentVisualScale(games, false), 1.08);
+  assert.equal(contentVisualScale(guestbook, false), 1.05);
+  assert.equal(contentVisualScale(image, false), 4);
 });
 
 test('published page keeps the exact editor aspect ratio on wider screens', () => {
