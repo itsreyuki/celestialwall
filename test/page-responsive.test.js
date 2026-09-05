@@ -20,7 +20,7 @@ test('responsive layout applies only partial mobile values', () => {
 });
 
 test('visual content scale follows both element dimensions', () => {
-  const element = { type: 'widget', position: { x: 50, y: 50 }, size: { width: 38, height: 16 }, visible: true, widgetData: { kind: 'quote' } };
+  const element = { type: 'widget', position: { x: 50, y: 50 }, size: { width: 38, height: 16 }, visible: true, widgetData: { kind: 'clock' } };
   assert.equal(elementVisualScale(element, false), 1);
   element.size = { width: 76, height: 32 };
   assert.equal(elementVisualScale(element, false), 2);
@@ -30,10 +30,10 @@ test('visual content scale follows both element dimensions', () => {
 
 test('content-heavy elements stop scaling and use extra room for content', () => {
   const games = { type: 'widget', position: { x: 50, y: 50 }, size: { width: 152, height: 64 }, visible: true, widgetData: { kind: 'games' } };
-  const guestbook = { ...games, widgetData: { kind: 'guestbook' } };
+  const clock = { ...games, widgetData: { kind: 'clock' } };
   const image = { ...games, type: 'image', widgetData: undefined };
   assert.equal(contentVisualScale(games, false), 1.08);
-  assert.equal(contentVisualScale(guestbook, false), 1.05);
+  assert.equal(contentVisualScale(clock, false), 1.2);
   assert.equal(contentVisualScale(image, false), 4);
 });
 

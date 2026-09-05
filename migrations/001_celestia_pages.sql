@@ -13,7 +13,6 @@ CREATE TABLE IF NOT EXISTS user_pages (
   published BOOLEAN NOT NULL DEFAULT FALSE,
   published_at TIMESTAMPTZ,
   reactions_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-  guestbook_enabled BOOLEAN NOT NULL DEFAULT FALSE,
   remix_enabled BOOLEAN NOT NULL DEFAULT FALSE,
   entrance_enabled BOOLEAN NOT NULL DEFAULT FALSE,
   config_version SMALLINT NOT NULL DEFAULT 1 CHECK (config_version = 1),
@@ -38,18 +37,6 @@ CREATE TABLE IF NOT EXISTS page_reactions (
 );
 
 CREATE INDEX IF NOT EXISTS page_reactions_page_id_idx ON page_reactions (page_id);
-
-CREATE TABLE IF NOT EXISTS guestbook_entries (
-  id UUID PRIMARY KEY,
-  page_id UUID NOT NULL REFERENCES user_pages(id) ON DELETE CASCADE,
-  author_user_id TEXT REFERENCES users(discord_id) ON DELETE SET NULL,
-  author_name VARCHAR(120),
-  message VARCHAR(500) NOT NULL CHECK (CHAR_LENGTH(BTRIM(message)) BETWEEN 1 AND 500),
-  approved BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS guestbook_entries_page_id_created_at_idx ON guestbook_entries (page_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS page_remixes (
   id UUID PRIMARY KEY,

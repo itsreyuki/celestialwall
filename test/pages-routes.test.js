@@ -135,29 +135,6 @@ test('Celestia Pages protects slugs, drafts, and ownership', async (t) => {
   result = await server.request(`/api/pages/${slug}/reactions/%E2%9D%A4%EF%B8%8F`, { method: 'DELETE' }, otherId);
   assert.equal(result.body.counts['❤️'] || 0, 0);
 
-  result = await server.request(`/api/pages/${slug}/guestbook`);
-  assert.equal(result.response.status, 404);
-  result = await server.request('/api/pages/me', { method: 'PATCH', body: JSON.stringify({ guestbookEnabled: true }) }, ownerId);
-  assert.equal(result.response.status, 200);
-  result = await server.request(`/api/pages/${slug}/guestbook`, { method: 'POST', body: JSON.stringify({ content: '<script>alert(1)</script> hello' }) }, otherId);
-  assert.equal(result.response.status, 201);
-  assert.equal(result.body.entry.content.includes('<'), false);
-  const entryId = result.body.entry.id;
-  result = await server.request(`/api/pages/me/guestbook/${entryId}`, { method: 'PATCH', body: JSON.stringify({ action: 'delete' }) }, otherId);
-  assert.equal(result.response.status, 404);
-  result = await server.request(`/api/pages/${slug}/guestbook`, { method: 'POST', body: JSON.stringify({ content: '<script>alert(1)</script> hello' }) }, otherId);
-  assert.equal(result.response.status, 429);
-  result = await server.request(`/api/pages/me/guestbook/${entryId}`, { method: 'PATCH', body: JSON.stringify({ action: 'pin', value: true }) }, ownerId);
-  assert.equal(result.body.entry.pinned, true);
-  result = await server.request(`/api/pages/me/guestbook/${entryId}`, { method: 'PATCH', body: JSON.stringify({ action: 'reply', content: 'Thank you' }) }, ownerId);
-  assert.equal(result.body.entry.ownerReply, 'Thank you');
-  result = await server.request(`/api/pages/me/guestbook/${entryId}`, { method: 'PATCH', body: JSON.stringify({ action: 'hide', value: true }) }, ownerId);
-  assert.equal(result.body.entry.hidden, true);
-  result = await server.request(`/api/pages/${slug}/guestbook`);
-  assert.equal(result.body.entries.length, 0);
-  result = await server.request(`/api/pages/me/guestbook/${entryId}`, { method: 'PATCH', body: JSON.stringify({ action: 'delete' }) }, ownerId);
-  assert.equal(result.body.entry.deleted, true);
-
   result = await server.request('/api/pages/me/unpublish', { method: 'POST', body: '{}' }, ownerId);
   assert.equal(result.response.status, 200);
   assert.equal(result.body.page.published, false);

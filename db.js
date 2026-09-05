@@ -2,7 +2,7 @@ const { Pool } = require('pg');
 const crypto = require('crypto');
 const fs = require('fs/promises');
 const path = require('path');
-const { pageInputSchema, parsePageConfiguration, createDefaultPageConfiguration } = require('./services/page-config');
+const { pageInputSchema, parsePageConfiguration, createDefaultPageConfiguration, PAGE_WIDGET_TYPES } = require('./services/page-config');
 
 const CANVAS_ID = 'main-wall';
 const defaultCanvasState = {
@@ -26,7 +26,6 @@ let canvasState = structuredClone(defaultCanvasState);
 let musicTracks = [];
 let userPages = [];
 let pageReactions = [];
-let guestbookEntries = [];
 let pageRemixes = [];
 
 function normalizeCanvasState(state) {
@@ -115,11 +114,11 @@ async function runMigrations() {
     id: '001_celestia_pages',
     file: path.join(__dirname, 'migrations', '001_celestia_pages.sql')
   }, {
-    id: '002_page_guestbook',
-    file: path.join(__dirname, 'migrations', '002_page_guestbook.sql')
-  }, {
     id: '003_celestia_pages_indexes',
     file: path.join(__dirname, 'migrations', '003_celestia_pages_indexes.sql')
+  }, {
+    id: '004_remove_page_widgets',
+    file: path.join(__dirname, 'migrations', '004_remove_page_widgets.sql')
   }];
   const applied = [];
 
@@ -298,10 +297,7 @@ function mergePageConfiguration(base, value) {
 function normalizePageConfiguration(configuration) {
   const legacy = structuredClone(configuration || {});
   if (Array.isArray(legacy.tabs)) legacy.tabs = legacy.tabs.map((tab) => ({ id: tab.id, label: tab.label, transition: tab.transition || 'fade', visible: tab.visible !== false }));
-  if (Array.isArray(legacy.elements)) legacy.elements = legacy.elements.map((element) => {
-    if (element.type !== 'widget' || element.widgetData) return element;
-    return { ...element, widget: 'quote', widgetData: { kind: 'quote', text: element.content || 'Widget', author: '' } };
-  });
+  if (Array.isArray(legacy.elements)) legacy.elements = legacy.elements.filter((element) => element.type !== 'widget' || PAGE_WIDGET_TYPES.includes(element.widgetData?.kind));
   const normalized = mergePageConfiguration(createDefaultPageConfiguration(), legacy);
   if (legacy.musicPlayer?.sourceUrl && !legacy.musicPlayer.audioUrl) normalized.musicPlayer.audioUrl = legacy.musicPlayer.sourceUrl;
   if (legacy.cursor?.type === 'dot' || legacy.cursor?.type === 'sparkle') {
@@ -325,7 +321,6 @@ function normalizeUserPage(page) {
     published: Boolean(page.published),
     publishedAt: page.published_at instanceof Date ? page.published_at.toISOString() : (page.published_at || page.publishedAt || null),
     reactionsEnabled: Boolean(page.reactions_enabled ?? page.reactionsEnabled),
-    guestbookEnabled: Boolean(page.guestbook_enabled ?? page.guestbookEnabled),
     remixEnabled: Boolean(page.remix_enabled ?? page.remixEnabled),
     entranceEnabled: Boolean(page.entrance_enabled ?? page.entranceEnabled),
     configVersion: Number(page.config_version || page.configVersion),
@@ -351,7 +346,6 @@ function createPagePayload(userId, input, id = crypto.randomUUID()) {
     published: data.published,
     publishedAt: data.published ? now : null,
     reactionsEnabled: data.reactionsEnabled,
-    guestbookEnabled: data.guestbookEnabled,
     remixEnabled: data.remixEnabled,
     entranceEnabled: data.entranceEnabled,
     configVersion: data.configuration.configVersion,
@@ -417,16 +411,16 @@ async function createUserPage(userId, input) {
   const result = await pool.query(`
     INSERT INTO user_pages (
       id, user_id, slug, display_name, bio, visibility, published, published_at,
-      reactions_enabled, guestbook_enabled, remix_enabled, entrance_enabled,
+      reactions_enabled, remix_enabled, entrance_enabled,
       config_version, configuration, views_count, created_at, updated_at
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, NOW(), NOW()
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, NOW(), NOW()
     )
     RETURNING *
   `, [
     payload.id, payload.userId, payload.slug, payload.displayName, payload.bio,
     payload.visibility, payload.published, payload.publishedAt, payload.reactionsEnabled,
-    payload.guestbookEnabled, payload.remixEnabled, payload.entranceEnabled,
+    payload.remixEnabled, payload.entranceEnabled,
     payload.configVersion, JSON.stringify(payload.configuration), payload.viewsCount
   ]);
   return normalizeUserPage(result.rows[0]);
@@ -455,74 +449,18 @@ async function updateUserPage(userId, input) {
   const result = await pool.query(`
     UPDATE user_pages
     SET slug = $2, display_name = $3, bio = $4, visibility = $5, published = $6,
-      published_at = $7, reactions_enabled = $8, guestbook_enabled = $9,
-      remix_enabled = $10, entrance_enabled = $11, config_version = $12,
-      configuration = $13::jsonb, updated_at = NOW()
+      published_at = $7, reactions_enabled = $8, remix_enabled = $9,
+      entrance_enabled = $10, config_version = $11,
+      configuration = $12::jsonb, updated_at = NOW()
     WHERE user_id = $1
     RETURNING *
   `, [
     userId, payload.slug, payload.displayName, payload.bio, payload.visibility,
     payload.published, payload.publishedAt, payload.reactionsEnabled,
-    payload.guestbookEnabled, payload.remixEnabled, payload.entranceEnabled,
+    payload.remixEnabled, payload.entranceEnabled,
     payload.configVersion, JSON.stringify(payload.configuration)
   ]);
   return normalizeUserPage(result.rows[0]);
-}
-
-function normalizeGuestbookEntry(entry) {
-  if (!entry) return null;
-  return {
-    id: entry.id,
-    pageId: entry.page_id || entry.pageId,
-    authorId: entry.author_user_id || entry.authorId || null,
-    authorName: entry.author_name || entry.authorName || 'Member',
-    content: entry.message || entry.content,
-    createdAt: entry.created_at instanceof Date ? entry.created_at.toISOString() : (entry.created_at || entry.createdAt),
-    pinned: Boolean(entry.pinned), hidden: Boolean(entry.hidden), deleted: Boolean(entry.deleted_at || entry.deletedAt),
-    ownerReply: entry.owner_reply || entry.ownerReply || '',
-    repliedAt: entry.replied_at instanceof Date ? entry.replied_at.toISOString() : (entry.replied_at || entry.repliedAt || null)
-  };
-}
-
-async function listGuestbookEntries(pageId, { before = null, limit = 20, includeHidden = false } = {}) {
-  const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 30);
-  if (!pool) {
-    const rows = guestbookEntries.filter((entry) => entry.pageId === pageId && (includeHidden || (!entry.hidden && !entry.deletedAt)))
-      .filter((entry) => !before || entry.createdAt < before)
-      .sort((first, second) => Number(second.pinned) - Number(first.pinned) || new Date(second.createdAt) - new Date(first.createdAt));
-    const slice = rows.slice(0, safeLimit + 1).map(normalizeGuestbookEntry);
-    return { entries: slice.slice(0, safeLimit), nextCursor: slice.length > safeLimit ? slice.at(-1).createdAt : null };
-  }
-  const result = await pool.query(`SELECT * FROM guestbook_entries WHERE page_id = $1
-    AND ($2::boolean OR (hidden = FALSE AND deleted_at IS NULL))
-    AND ($3::timestamptz IS NULL OR created_at < $3::timestamptz)
-    ORDER BY pinned DESC, created_at DESC LIMIT $4`, [pageId, includeHidden, before, safeLimit + 1]);
-  const rows = result.rows.map(normalizeGuestbookEntry);
-  return { entries: rows.slice(0, safeLimit), nextCursor: rows.length > safeLimit ? rows.at(-1).createdAt : null };
-}
-
-async function createGuestbookEntry({ pageId, authorId, authorName, content }) {
-  const entry = { id: crypto.randomUUID(), pageId, authorId, authorName, content, createdAt: new Date().toISOString(), pinned: false, hidden: false, deletedAt: null, ownerReply: '', repliedAt: null };
-  if (!pool) { guestbookEntries.unshift(entry); return normalizeGuestbookEntry(entry); }
-  const result = await pool.query(`INSERT INTO guestbook_entries (id, page_id, author_user_id, author_name, message)
-    VALUES ($1, $2, $3, $4, $5) RETURNING *`, [entry.id, pageId, authorId, authorName, content]);
-  return normalizeGuestbookEntry(result.rows[0]);
-}
-
-async function updateGuestbookEntry(pageId, entryId, changes) {
-  if (!pool) {
-    const entry = guestbookEntries.find((item) => item.id === entryId && item.pageId === pageId);
-    if (!entry) return null;
-    Object.assign(entry, changes);
-    if (changes.deleted) entry.deletedAt = new Date().toISOString();
-    if (changes.ownerReply !== undefined) entry.repliedAt = new Date().toISOString();
-    return normalizeGuestbookEntry(entry);
-  }
-  const result = await pool.query(`UPDATE guestbook_entries SET pinned = COALESCE($3, pinned), hidden = COALESCE($4, hidden),
-    deleted_at = CASE WHEN $5::boolean THEN NOW() ELSE deleted_at END,
-    owner_reply = COALESCE($6, owner_reply), replied_at = CASE WHEN $6::text IS NOT NULL THEN NOW() ELSE replied_at END
-    WHERE id = $1 AND page_id = $2 RETURNING *`, [entryId, pageId, changes.pinned ?? null, changes.hidden ?? null, Boolean(changes.deleted), changes.ownerReply ?? null]);
-  return normalizeGuestbookEntry(result.rows[0]);
 }
 
 async function getPageReactionSummary(pageId, userId = null) {
@@ -584,9 +522,6 @@ module.exports = {
   recordUserPageView,
   createUserPage,
   updateUserPage,
-  listGuestbookEntries,
-  createGuestbookEntry,
-  updateGuestbookEntry,
   getPageReactionSummary,
   addPageReaction,
   removePageReaction,

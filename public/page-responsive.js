@@ -19,10 +19,7 @@
     music: 1.15,
     widget: 1.2,
     'widget:characters': 1.08,
-    'widget:games': 1.08,
-    'widget:gallery': 1.08,
-    'widget:guestbook': 1.05,
-    'widget:poll': 1.12
+    'widget:games': 1.08
   });
 
   function resolveElementLayout(element, mobile) {
@@ -42,8 +39,7 @@
   }
 
   function elementVisualScale(element, mobile, resolvedLayout = resolveElementLayout(element, mobile)) {
-    const fallbackHeight = element.widgetData?.kind === 'gallery' ? 30 : 16;
-    const [baseWidth, baseHeight] = ELEMENT_BASE_SIZES[element.type] || [38, fallbackHeight];
+    const [baseWidth, baseHeight] = ELEMENT_BASE_SIZES[element.type] || [38, 16];
     const scale = Math.sqrt((resolvedLayout.size.width / baseWidth) * (resolvedLayout.size.height / baseHeight));
     return Math.max(.15, Math.min(4, scale));
   }

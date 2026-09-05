@@ -8,7 +8,6 @@ const detailsForm = document.querySelector('#page-details-form');
 const displayNameInput = document.querySelector('#page-display-name');
 const bioInput = document.querySelector('#page-bio');
 const reactionsEnabledInput = document.querySelector('#page-reactions-enabled');
-const guestbookEnabledInput = document.querySelector('#page-guestbook-enabled');
 const remixEnabledInput = document.querySelector('#page-remix-enabled');
 const pageState = document.querySelector('#page-state');
 const pageUrl = document.querySelector('#page-url');
@@ -48,7 +47,6 @@ function renderPage() {
   displayNameInput.value = currentPage.displayName || '';
   bioInput.value = currentPage.bio || '';
   reactionsEnabledInput.checked = Boolean(currentPage.reactionsEnabled);
-  guestbookEnabledInput.checked = Boolean(currentPage.guestbookEnabled);
   remixEnabledInput.checked = Boolean(currentPage.remixEnabled);
   pageState.textContent = currentPage.published ? 'منشورة للعامة' : 'مسودة';
   pageState.classList.toggle('is-published', currentPage.published);
@@ -102,7 +100,7 @@ createForm.addEventListener('submit', async (event) => {
 detailsForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   try {
-    const data = await request('/api/pages/me', { method: 'PATCH', body: JSON.stringify({ displayName: displayNameInput.value, bio: bioInput.value, reactionsEnabled: reactionsEnabledInput.checked, guestbookEnabled: guestbookEnabledInput.checked, remixEnabled: remixEnabledInput.checked }) });
+    const data = await request('/api/pages/me', { method: 'PATCH', body: JSON.stringify({ displayName: displayNameInput.value, bio: bioInput.value, reactionsEnabled: reactionsEnabledInput.checked, remixEnabled: remixEnabledInput.checked }) });
     currentPage = data.page;
     renderPage();
     setNotice(pageNotice, 'تم حفظ التعديلات.', 'success');

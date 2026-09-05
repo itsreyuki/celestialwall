@@ -48,14 +48,9 @@ function placeholderImage() {
 }
 
 function sanitizeWidget(widgetData) {
-  if (widgetData.kind === 'quote') return { kind: 'quote', text: 'Your quote', author: '' };
-  if (widgetData.kind === 'mood') return { kind: 'mood', text: 'Your mood', icon: '✨' };
   if (widgetData.kind === 'characters' || widgetData.kind === 'games') return { kind: widgetData.kind, items: [{ id: 'remix-item', name: 'Your favorite', image: placeholderImage() }] };
-  if (widgetData.kind === 'gallery') return { kind: 'gallery', layout: widgetData.layout, items: [{ id: 'remix-gallery', image: placeholderImage(), caption: '' }] };
-  if (widgetData.kind === 'countdown') return { kind: 'countdown', title: 'Your event', targetDate: new Date(Date.now() + 86400000).toISOString(), finishedText: 'Finished' };
-  if (widgetData.kind === 'poll') return { kind: 'poll', question: 'Your question?', options: [{ id: 'remix-option-1', label: 'Option one' }, { id: 'remix-option-2', label: 'Option two' }] };
-  if (widgetData.kind === 'guestbook') return null;
-  return structuredClone(widgetData);
+  if (widgetData.kind === 'counter' || widgetData.kind === 'clock') return structuredClone(widgetData);
+  return null;
 }
 
 function createRemixConfiguration(source) {
@@ -65,7 +60,6 @@ function createRemixConfiguration(source) {
   config.banner = { ...fresh.banner, asset: null, visible: false };
   config.background = config.background.type === 'solid' || config.background.type === 'gradient' ? config.background : fresh.background;
   config.socialLinks = [];
-  config.galleryImages = [];
   config.musicPlayer = source.musicPlayer?.enabled || source.elements.some((element) => element.type === 'music')
     ? { ...fresh.musicPlayer, enabled: true, title: 'Your song', artist: 'Add music' }
     : fresh.musicPlayer;

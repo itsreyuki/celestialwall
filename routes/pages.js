@@ -7,7 +7,6 @@ const path = require('path');
 const multer = require('multer');
 const {
   createUserPage,
-  createGuestbookEntry,
   createPageRemix,
   addPageReaction,
   removePageReaction,
@@ -15,9 +14,7 @@ const {
   getPageRemixCount,
   getUserPageBySlug,
   getUserPageByUserId,
-  listGuestbookEntries,
   recordUserPageView,
-  updateGuestbookEntry,
   updateUserPage
 } = require('../db');
 const { THEMES, applyTheme, createRemixConfiguration } = require('../services/page-themes');
@@ -25,7 +22,6 @@ const {
   createDefaultPageConfiguration,
   RESERVED_SLUGS,
   slugSchema,
-  PAGE_LIMITS,
   PAGE_UPLOAD_LIMITS,
   PAGE_ASSET_TYPES,
   PAGE_RATE_LIMITS
@@ -46,7 +42,6 @@ const ASSET_PURPOSES = Object.freeze({
   'cursor-image': new Set(['image']),
   'widget-image': new Set(['image'])
 });
-const guestbookRate = new Map();
 const mutationRate = new Map();
 const upload = multer({
   storage: multer.diskStorage({
@@ -74,25 +69,6 @@ function requireUser(req, res, next) {
 async function publishedPage(slug) {
   const page = await getUserPageBySlug(slug);
   return page && page.published && page.visibility !== 'private' ? page : null;
-}
-
-function cleanGuestbookContent(value) {
-  return typeof value === 'string' ? value.replace(/[<>]/g, '').replace(/\s+/g, ' ').trim() : '';
-}
-
-function canPostGuestbook(pageId, userId, content) {
-  const key = `${pageId}:${userId}`;
-  const now = Date.now();
-  const recent = (guestbookRate.get(key) || []).filter((item) => now - item.at < PAGE_RATE_LIMITS.guestbook.windowMs);
-  if (recent.length >= PAGE_RATE_LIMITS.guestbook.max || recent.some((item) => item.content === content && now - item.at < 10 * 60 * 1000)) return false;
-  recent.push({ at: now, content });
-  guestbookRate.set(key, recent);
-  if (guestbookRate.size > 5000) {
-    for (const [entryKey, entries] of guestbookRate) {
-      if (!entries.some((entry) => now - entry.at < PAGE_RATE_LIMITS.guestbook.windowMs)) guestbookRate.delete(entryKey);
-    }
-  }
-  return true;
 }
 
 function allowMutation(key, limit, windowMs) {
@@ -129,7 +105,6 @@ function pageInputForUser(user, page, changes = {}) {
     visibility: changes.visibility ?? page?.visibility ?? 'private',
     published: changes.published ?? page?.published ?? false,
     reactionsEnabled: changes.reactionsEnabled ?? page?.reactionsEnabled ?? true,
-    guestbookEnabled: changes.guestbookEnabled ?? page?.guestbookEnabled ?? false,
     remixEnabled: changes.remixEnabled ?? page?.remixEnabled ?? false,
     entranceEnabled: changes.entranceEnabled ?? (changes.configuration ? Boolean(configuration.entranceScreen?.enabled) : (page?.entranceEnabled ?? false)),
     configuration
@@ -150,7 +125,6 @@ async function publicPageResponse(page) {
       publishedAt: page.publishedAt,
       viewsCount: page.viewsCount || 0,
       reactionsEnabled: page.reactionsEnabled,
-      guestbookEnabled: page.guestbookEnabled,
       remixEnabled: page.remixEnabled,
       remixCount: await getPageRemixCount(page.id),
       avatarUrl: configuration.avatar?.asset?.url || null,
@@ -363,46 +337,6 @@ router.delete('/:slug/reactions/:reaction', requireUser, requireMutationRate(PAG
   } catch (error) { return next(error); }
 });
 
-router.get('/:slug/guestbook', async (req, res, next) => {
-  try {
-    const page = await publishedPage(req.params.slug);
-    const owner = sessionUser(req)?.id === page?.userId;
-    if (!page || !page.guestbookEnabled) return res.status(404).json({ error: 'Guestbook is unavailable.' });
-    const before = typeof req.query.before === 'string' && !Number.isNaN(Date.parse(req.query.before)) ? req.query.before : null;
-    const data = await listGuestbookEntries(page.id, { before, limit: req.query.limit, includeHidden: owner });
-    return res.json({ ...data, canManage: owner });
-  } catch (error) { return next(error); }
-});
-
-router.post('/:slug/guestbook', requireUser, async (req, res, next) => {
-  try {
-    const page = await publishedPage(req.params.slug);
-    if (!page || !page.guestbookEnabled) return res.status(404).json({ error: 'Guestbook is unavailable.' });
-    const content = cleanGuestbookContent(req.body?.content);
-    if (!content || content.length > PAGE_LIMITS.guestbookLength) return res.status(400).json({ error: `Guestbook messages must be 1-${PAGE_LIMITS.guestbookLength} characters.` });
-    if (!canPostGuestbook(page.id, sessionUser(req).id, content)) return res.status(429).json({ error: 'Please wait before posting another similar message.' });
-    const user = sessionUser(req);
-    const entry = await createGuestbookEntry({ pageId: page.id, authorId: user.id, authorName: user.global_name || user.username || 'Member', content });
-    return res.status(201).json({ entry });
-  } catch (error) { return next(error); }
-});
-
-router.patch('/me/guestbook/:entryId', requireUser, requireMutationRate(PAGE_RATE_LIMITS.guestbookManage.max, PAGE_RATE_LIMITS.guestbookManage.windowMs, 'guestbook-manage'), async (req, res, next) => {
-  try {
-    const page = await getUserPageByUserId(sessionUser(req).id);
-    if (!page) return res.status(404).json({ error: 'Page not found.' });
-    const action = req.body?.action;
-    const changes = action === 'pin' ? { pinned: Boolean(req.body?.value) }
-      : action === 'hide' ? { hidden: Boolean(req.body?.value) }
-        : action === 'delete' ? { deleted: true }
-          : action === 'reply' ? { ownerReply: cleanGuestbookContent(req.body?.content) } : null;
-    if (!changes || (action === 'reply' && (!changes.ownerReply || changes.ownerReply.length > 500))) return res.status(400).json({ error: 'Invalid guestbook update.' });
-    const entry = await updateGuestbookEntry(page.id, req.params.entryId, changes);
-    if (!entry) return res.status(404).json({ error: 'Guestbook entry not found.' });
-    return res.json({ entry });
-  } catch (error) { return next(error); }
-});
-
 router.post('/:slug/remix', requireUser, requireMutationRate(PAGE_RATE_LIMITS.remix.max, PAGE_RATE_LIMITS.remix.windowMs, 'remix'), async (req, res, next) => {
   try {
     const source = await publishedPage(req.params.slug);
@@ -413,7 +347,6 @@ router.post('/:slug/remix', requireUser, requireMutationRate(PAGE_RATE_LIMITS.re
     const page = await createUserPage(user.id, pageInputForUser(user, null, {
       slug: req.body?.slug,
       configuration: createRemixConfiguration(source.configuration),
-      guestbookEnabled: false,
       remixEnabled: false,
       entranceEnabled: false
     }));

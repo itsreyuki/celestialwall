@@ -14,18 +14,17 @@ test('built-in themes create valid full and style-only configurations', () => {
   assert.equal(validatePageConfiguration(full).success, true);
 });
 
-test('remix strips personal media, links, music, gallery, and guestbook content', () => {
+test('remix strips personal media, links, and music content', () => {
   const source = createDefaultPageConfiguration();
   source.background = { ...source.background, type: 'image', asset: { url: '/uploads/pages/users/demo/private.png', position: 'center', fit: 'cover' } };
   source.avatar.asset = { url: '/uploads/pages/users/demo/avatar.png', position: 'center', fit: 'cover' };
   source.socialLinks = [{ id: 'link', label: 'Private', url: 'https://example.com', visible: true }];
   source.musicPlayer = { ...source.musicPlayer, enabled: true, audioUrl: '/uploads/pages/users/demo/song.mp3', title: 'Private track' };
-  source.elements.push({ id: 'image', type: 'image', position: { x: 50, y: 20 }, size: { width: 20, height: 20 }, zIndex: 2, visible: true, style: {}, assetUrl: '/uploads/pages/users/demo/private.png' }, { id: 'book', type: 'widget', widget: 'guestbook', widgetData: { kind: 'guestbook', text: 'Private guestbook' }, position: { x: 50, y: 70 }, size: { width: 40, height: 20 }, zIndex: 3, visible: true, style: {} }, { id: 'links', type: 'social-links', position: { x: 50, y: 85 }, size: { width: 40, height: 10 }, zIndex: 4, visible: true, style: {}, links: [{ id: 'private-link', label: 'Private', url: 'https://example.com', icon: 'website', display: 'both', visible: true }] });
+  source.elements.push({ id: 'image', type: 'image', position: { x: 50, y: 20 }, size: { width: 20, height: 20 }, zIndex: 2, visible: true, style: {}, assetUrl: '/uploads/pages/users/demo/private.png' }, { id: 'links', type: 'social-links', position: { x: 50, y: 85 }, size: { width: 40, height: 10 }, zIndex: 4, visible: true, style: {}, links: [{ id: 'private-link', label: 'Private', url: 'https://example.com', icon: 'website', display: 'both', visible: true }] });
   const remix = createRemixConfiguration(source);
   assert.equal(remix.avatar.asset, null);
   assert.equal(remix.socialLinks.length, 0);
   assert.equal(remix.musicPlayer.audioUrl, null);
-  assert.equal(remix.elements.some((element) => element.widget === 'guestbook'), false);
   assert.equal(remix.elements.find((element) => element.id === 'image').assetUrl, 'https://celes.lol/assets/logo.png');
   assert.deepEqual(remix.elements.find((element) => element.id === 'links').links, []);
   assert.equal(validatePageConfiguration(remix).success, true);

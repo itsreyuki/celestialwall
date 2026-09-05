@@ -82,16 +82,22 @@ test('configuration requires assets for image elements', () => {
 
 test('configuration accepts bounded widgets and validates tab links', () => {
   const config = createDefaultPageConfiguration();
-  config.tabs = [{ id: 'home', label: 'Home', transition: 'fade', visible: true }, { id: 'gallery', label: 'Gallery', transition: 'slide', visible: true }];
+  config.tabs = [{ id: 'home', label: 'Home', transition: 'fade', visible: true }, { id: 'about', label: 'About', transition: 'slide', visible: true }];
   config.elements.push({
-    id: 'quote-widget', type: 'widget', widget: 'quote', widgetData: { kind: 'quote', text: 'Celestia', author: 'Lina' },
+    id: 'games-widget', type: 'widget', widget: 'games', widgetData: { kind: 'games', items: [{ id: 'game', name: 'Celestia', image: { url: '/assets/stickers/star.svg', position: 'center', fit: 'cover' } }] },
     position: { x: 50, y: 20 }, size: { width: 40, height: 16 }, zIndex: 2, visible: true, style: {}, tabId: 'home'
   }, {
-    id: 'gallery-widget', type: 'widget', widget: 'gallery', widgetData: { kind: 'gallery', layout: 'masonry', items: [{ id: 'gallery-item', image: { url: '/assets/stickers/star.svg', position: 'center', fit: 'cover' }, caption: 'Star' }] },
-    position: { x: 50, y: 75 }, size: { width: 55, height: 24 }, zIndex: 3, visible: true, style: {}, tabId: 'gallery'
+    id: 'clock-widget', type: 'widget', widget: 'clock', widgetData: { kind: 'clock', format: '24h', showSeconds: false },
+    position: { x: 50, y: 75 }, size: { width: 55, height: 24 }, zIndex: 3, visible: true, style: {}, tabId: 'about'
   });
   assert.equal(validatePageConfiguration(config).success, true);
   config.elements[1].tabId = 'missing';
+  assert.equal(validatePageConfiguration(config).success, false);
+});
+
+test('configuration rejects removed widget types', () => {
+  const config = createDefaultPageConfiguration();
+  config.elements.push({ id: 'removed', type: 'widget', widget: 'quote', widgetData: { kind: 'quote', text: 'Removed', author: '' }, position: { x: 50, y: 50 }, size: { width: 40, height: 16 }, zIndex: 2, visible: true, style: {} });
   assert.equal(validatePageConfiguration(config).success, false);
 });
 

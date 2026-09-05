@@ -306,15 +306,12 @@ function applyContentScale(elementNode, element, layout) {
   if (widget) {
     const widgetScale = scale;
     widget.style.fontSize = `${Math.round((element.style.fontSize || 11) * scale * 10) / 10}px`;
-    widget.style.padding = element.widgetData?.kind === 'guestbook'
-      ? `${Math.round(Math.max(7, Math.min(12, 9 * widgetScale)))}px`
-      : `${Math.round(Math.max(2, Math.min(36, 9 * widgetScale)))}px`;
+    widget.style.padding = `${Math.round(Math.max(2, Math.min(36, 9 * widgetScale)))}px`;
     widget.style.boxShadow = element.style.shadow === 'strong'
       ? '0 14px 28px rgba(0,0,0,.5)'
       : (element.style.shadow === 'soft' ? '0 8px 18px rgba(0,0,0,.3)' : 'none');
     if (element.style.glow) widget.style.boxShadow += ', 0 0 20px rgba(241,199,94,.45)';
     widget.style.setProperty('--favorite-card-size', `${Math.max(10, Math.round(48 * scale))}px`);
-    widget.style.setProperty('--gallery-card-size', `${Math.max(34, Math.round(76 * scale))}px`);
   }
 
   const music = elementNode.querySelector('.editor-music');
@@ -404,15 +401,10 @@ function profileCardNode(element, scale = 1) {
 function widgetDefault(kind) {
   const image = { url: 'https://celes.lol/assets/logo.png', position: 'center', fit: 'cover' };
   const id = () => EditorState.createId('item');
-  if (kind === 'quote') return { kind, text: 'اكتب اقتباسك هنا', author: '' };
-  if (kind === 'mood') return { kind, text: 'مزاج هادئ', icon: '✨' };
   if (kind === 'characters' || kind === 'games') return { kind, items: [{ id: id(), name: kind === 'characters' ? 'شخصيتي المفضلة' : 'لعبتي المفضلة', image }] };
-  if (kind === 'gallery') return { kind, items: [{ id: id(), image, caption: '' }], layout: 'grid' };
   if (kind === 'counter') return { kind, label: 'Visitors' };
   if (kind === 'clock') return { kind, format: '24h', showSeconds: false };
-  if (kind === 'countdown') return { kind, title: 'الحدث القادم', targetDate: new Date(Date.now() + 86400000).toISOString(), finishedText: 'انتهى الحدث' };
-  if (kind === 'poll') return { kind, question: 'ما رأيك؟', options: [{ id: id(), label: 'خيار أول' }, { id: id(), label: 'خيار ثانٍ' }] };
-  return { kind: 'guestbook', text: 'اترك رسالة في سجل الزوار.' };
+  throw new Error('Unsupported widget type.');
 }
 
 function widgetPreview(element) {
@@ -422,28 +414,11 @@ function widgetPreview(element) {
   const layout = responsive.resolveElementLayout(element, mobilePreviewActive());
   const scale = elementScale(element, layout);
   node.style.fontSize = `${Math.round((element.style.fontSize || 11) * scale * 10) / 10}px`;
-  node.style.padding = data.kind === 'guestbook'
-    ? `${Math.round(Math.max(7, Math.min(12, 9 * scale)))}px`
-    : `${Math.round(Math.max(2, Math.min(36, 9 * scale)))}px`;
+  node.style.padding = `${Math.round(Math.max(2, Math.min(36, 9 * scale)))}px`;
   node.style.color = element.style.color || '';
   node.style.background = element.style.backgroundColor || '';
   node.style.borderRadius = `${element.style.borderRadius ?? 12}px`;
-  if (data.kind === 'quote') {
-    const quote = document.createElement('blockquote');
-    quote.textContent = `“${data.text}”`;
-    node.append(quote);
-    if (data.author) {
-      const author = document.createElement('cite');
-      author.textContent = `— ${data.author}`;
-      node.append(author);
-    }
-  } else if (data.kind === 'mood') {
-    const icon = document.createElement('b');
-    icon.textContent = data.icon || '✨';
-    const mood = document.createElement('span');
-    mood.textContent = data.text;
-    node.append(icon, mood);
-  } else if (data.kind === 'characters' || data.kind === 'games') {
+  if (data.kind === 'characters' || data.kind === 'games') {
     const list = document.createElement('div');
     list.className = 'editor-widget-favorites';
     data.items.forEach((item) => {
@@ -459,25 +434,6 @@ function widgetPreview(element) {
       list.append(card);
     });
     node.append(list);
-  } else if (data.kind === 'gallery') {
-    const gallery = document.createElement('div');
-    gallery.className = `editor-widget-gallery layout-${data.layout}`;
-    data.items.forEach((item) => {
-      const figure = document.createElement('figure');
-      const image = document.createElement('img');
-      image.src = item.image.url;
-      image.alt = '';
-      image.style.objectFit = item.image.fit || 'cover';
-      image.style.objectPosition = assetPosition(item.image);
-      figure.append(image);
-      if (item.caption) {
-        const caption = document.createElement('figcaption');
-        caption.textContent = item.caption;
-        figure.append(caption);
-      }
-      gallery.append(figure);
-    });
-    node.append(gallery);
   } else if (data.kind === 'clock') {
     const now = new Date();
     const icon = document.createElement('span');
@@ -491,60 +447,8 @@ function widgetPreview(element) {
     date.textContent = new Intl.DateTimeFormat('ar', { weekday: 'long', day: 'numeric', month: 'long' }).format(now);
     face.append(time, date);
     node.append(icon, face);
-  } else if (data.kind === 'countdown') {
-    const difference = Math.max(0, new Date(data.targetDate).getTime() - Date.now());
-    const total = Math.floor(difference / 1000);
-    const title = document.createElement('strong');
-    title.textContent = difference ? data.title : (data.finishedText || 'انتهى');
-    const value = document.createElement('span');
-    value.textContent = difference ? `${Math.floor(total / 86400)}d ${Math.floor(total % 86400 / 3600)}h ${Math.floor(total % 3600 / 60)}m` : '';
-    node.append(title, value);
-  } else if (data.kind === 'poll') {
-    const question = document.createElement('strong');
-    question.textContent = data.question;
-    node.append(question);
-    data.options.forEach((option) => {
-      const button = document.createElement('span');
-      button.className = 'editor-poll-option';
-      button.textContent = option.label;
-      node.append(button);
-    });
   } else if (data.kind === 'counter') {
     node.textContent = `${data.label}: ${currentPage.viewsCount || 0}`;
-  } else {
-    const header = document.createElement('span');
-    header.className = 'editor-guestbook-header';
-    const icon = document.createElement('b');
-    icon.textContent = '✦';
-    const heading = document.createElement('span');
-    const title = document.createElement('strong');
-    title.textContent = 'سجل الزوار';
-    const subtitle = document.createElement('small');
-    subtitle.textContent = 'اترك أثرًا لطيفًا';
-    heading.append(title, subtitle);
-    header.append(icon, heading);
-    const list = document.createElement('span');
-    list.className = 'editor-guestbook-list';
-    const entry = document.createElement('span');
-    entry.className = 'editor-guestbook-entry';
-    const avatar = document.createElement('b');
-    avatar.textContent = 'C';
-    const comment = document.createElement('span');
-    const author = document.createElement('strong');
-    author.textContent = 'Celestia';
-    const message = document.createElement('span');
-    message.textContent = data.text;
-    comment.append(author, message);
-    entry.append(avatar, comment);
-    list.append(entry);
-    const action = document.createElement('span');
-    action.className = 'editor-guestbook-action';
-    const placeholder = document.createElement('span');
-    placeholder.textContent = 'اكتب رسالة لطيفة…';
-    const send = document.createElement('b');
-    send.textContent = 'إرسال';
-    action.append(placeholder, send);
-    node.append(header, list, action);
   }
   return node;
 }
@@ -815,24 +719,12 @@ function widgetInspectorFields(element) {
   const data = element.widgetData;
   const appearance = `<fieldset class="inspector-group"><legend>مظهر الـ Widget</legend>${field('حجم النص (px)', 'style.fontSize', element.style.fontSize || 11, 'number', 'min="10" max="96" step="0.5"')}${field('لون النص', 'style.color', element.style.color || '#fff4d4')}${field('لون الخلفية', 'style.backgroundColor', element.style.backgroundColor || '#1c1231')}${field('استدارة الحواف', 'style.borderRadius', element.style.borderRadius ?? 12, 'number', 'min="0" max="100"')}<label class="switch-field">توهج<input data-field="style.glow" type="checkbox" ${element.style.glow ? 'checked' : ''} /></label>${selectField('الظل', 'style.shadow', element.style.shadow || 'none', [['none', 'بدون'], ['soft', 'خفيف'], ['strong', 'قوي']], 'data-field')}</fieldset>`;
   let controls = '';
-  if (data.kind === 'quote') controls = `${field('النص', 'widgetData.text', data.text)}${field('الكاتب', 'widgetData.author', data.author)}`;
-  else if (data.kind === 'mood') controls = `${field('المزاج', 'widgetData.text', data.text)}${field('الأيقونة', 'widgetData.icon', data.icon)}`;
   if (data.kind === 'characters' || data.kind === 'games') {
     const items = data.items.map((item, index) => `<fieldset class="widget-item-fields"><legend>${data.kind === 'characters' ? 'شخصية' : 'لعبة'} ${index + 1}</legend>${field('الاسم', `widgetData.items.${index}.name`, item.name)}${field('رابط الصورة', `widgetData.items.${index}.image.url`, item.image.url, 'url')}<label class="upload-field">رفع صورة<input data-upload="widget-image" data-widget-index="${index}" type="file" accept="image/jpeg,image/png,image/webp,image/gif" /></label><button type="button" data-widget-action="remove-item" data-widget-index="${index}" ${data.items.length === 1 ? 'disabled' : ''}>حذف</button></fieldset>`).join('');
     controls = `${items}<button type="button" data-widget-action="item" ${data.items.length >= 6 ? 'disabled' : ''}>+ إضافة</button>`;
   }
-  else if (data.kind === 'gallery') {
-    const items = data.items.map((item, index) => `<fieldset class="widget-item-fields"><legend>صورة ${index + 1}</legend>${field('رابط الصورة', `widgetData.items.${index}.image.url`, item.image.url, 'url')}${field('التعليق', `widgetData.items.${index}.caption`, item.caption || '')}<label class="upload-field">رفع صورة<input data-upload="widget-image" data-widget-index="${index}" type="file" accept="image/jpeg,image/png,image/webp,image/gif" /></label><button type="button" data-widget-action="remove-item" data-widget-index="${index}" ${data.items.length === 1 ? 'disabled' : ''}>حذف</button></fieldset>`).join('');
-    controls = `${selectField('التخطيط', 'widgetData.layout', data.layout, [['grid', 'Grid'], ['polaroid', 'Polaroid'], ['masonry', 'Masonry']], 'data-field')}${items}<button type="button" data-widget-action="item" ${data.items.length >= 12 ? 'disabled' : ''}>+ إضافة صورة</button>`;
-  }
   else if (data.kind === 'counter') controls = field('العنوان', 'widgetData.label', data.label);
   else if (data.kind === 'clock') controls = `${selectField('النظام', 'widgetData.format', data.format, [['12h', '12 ساعة'], ['24h', '24 ساعة']], 'data-field')}<label class="switch-field">الثواني<input data-field="widgetData.showSeconds" type="checkbox" ${data.showSeconds ? 'checked' : ''} /></label>`;
-  else if (data.kind === 'countdown') controls = `${field('العنوان', 'widgetData.title', data.title)}${field('الموعد', 'widgetData.targetDate', data.targetDate.slice(0, 16), 'datetime-local')}${field('بعد الانتهاء', 'widgetData.finishedText', data.finishedText)}`;
-  else if (data.kind === 'poll') {
-    const options = data.options.map((option, index) => `<fieldset class="widget-item-fields"><legend>خيار ${index + 1}</legend>${field('النص', `widgetData.options.${index}.label`, option.label)}<button type="button" data-widget-action="remove-option" data-widget-index="${index}" ${data.options.length <= 2 ? 'disabled' : ''}>حذف</button></fieldset>`).join('');
-    controls = `${field('السؤال', 'widgetData.question', data.question)}${options}<button type="button" data-widget-action="option" ${data.options.length >= 4 ? 'disabled' : ''}>+ خيار</button>`;
-  }
-  else if (!controls) controls = field('النص', 'widgetData.text', data.text);
   return `${controls}${appearance}`;
 }
 
@@ -930,7 +822,7 @@ function renderStickerLibrary() {
 }
 
 function renderWidgetLibrary() {
-  const widgets = [['quote', 'Quote'], ['mood', 'Mood'], ['characters', 'Characters'], ['games', 'Games'], ['gallery', 'Gallery'], ['counter', 'Counter'], ['clock', 'Clock'], ['countdown', 'Countdown'], ['poll', 'Poll'], ['guestbook', 'Guestbook']];
+  const widgets = [['characters', 'Characters'], ['games', 'Games'], ['counter', 'Counter'], ['clock', 'Clock']];
   designControls.insertAdjacentHTML('beforeend', `<details id="widget-library"><summary>Widgets</summary><div class="widget-library">${widgets.map(([kind, label]) => `<button type="button" data-widget-add="${kind}">${label}</button>`).join('')}</div></details>`);
 }
 
@@ -951,7 +843,7 @@ function renderTabsControls() {
 
 function renderCommunityControls() {
   const presets = state.configuration.reactionPresets;
-  designControls.insertAdjacentHTML('beforeend', `<details><summary>التفاعل والمفكرة</summary><div><label class="switch-field">تفعيل التفاعلات<input data-page-field="reactionsEnabled" type="checkbox" ${currentPage.reactionsEnabled ? 'checked' : ''} /></label><div class="reaction-presets">${['❤️', '⭐', '🎀', '🔥'].map((reaction) => `<button type="button" data-reaction-preset="${reaction}" aria-pressed="${presets.includes(reaction)}">${reaction}</button>`).join('')}</div><label class="switch-field">فتح سجل الزوار<input data-page-field="guestbookEnabled" type="checkbox" ${currentPage.guestbookEnabled ? 'checked' : ''} /></label><label class="switch-field">السماح بالـ Remix<input data-page-field="remixEnabled" type="checkbox" ${currentPage.remixEnabled ? 'checked' : ''} /></label></div></details>`);
+  designControls.insertAdjacentHTML('beforeend', `<details><summary>التفاعل</summary><div><label class="switch-field">تفعيل التفاعلات<input data-page-field="reactionsEnabled" type="checkbox" ${currentPage.reactionsEnabled ? 'checked' : ''} /></label><div class="reaction-presets">${['❤️', '⭐', '🎀', '🔥'].map((reaction) => `<button type="button" data-reaction-preset="${reaction}" aria-pressed="${presets.includes(reaction)}">${reaction}</button>`).join('')}</div><label class="switch-field">السماح بالـ Remix<input data-page-field="remixEnabled" type="checkbox" ${currentPage.remixEnabled ? 'checked' : ''} /></label></div></details>`);
 }
 
 function renderThemeControls() {
@@ -1110,8 +1002,7 @@ function addSticker(name) {
 
 function addWidget(kind) {
   if (state.configuration.elements.length >= ELEMENT_LIMIT || state.configuration.elements.filter((item) => item.type === 'widget').length >= 6) return;
-  const spaciousWidget = kind === 'gallery' || kind === 'guestbook';
-  EditorState.addElement(state, { type: 'widget', widget: kind, widgetData: widgetDefault(kind), name: `Widget: ${kind}`, size: { width: kind === 'guestbook' ? 48 : 38, height: spaciousWidget ? 30 : 16 }, tabId: activeTabId || state.configuration.tabs[0]?.id });
+  EditorState.addElement(state, { type: 'widget', widget: kind, widgetData: widgetDefault(kind), name: `Widget: ${kind}`, size: { width: 38, height: 16 }, tabId: activeTabId || state.configuration.tabs[0]?.id });
   openSettingsPanel();
   renderAll();
   scheduleAutosave();
@@ -1187,7 +1078,6 @@ function applyInspectorChange(input, record = true) {
   const mobile = key.startsWith('mobileOverrides.');
   const initialLayout = responsive.resolveElementLayout(element, mobile);
   const initialFontSize = elementFontSize(element, mobile);
-  if (key === 'widgetData.targetDate' && input.value) value = new Date(input.value).toISOString();
   if (key.startsWith('profileCard.') || key.startsWith('musicPlayer.') || key.startsWith('typography.')) setNested(state.configuration, key, value);
   else if (key.startsWith('avatar.') || key.startsWith('banner.')) {
     if (key.includes('.asset.') && !state.configuration[key.split('.')[0]].asset) return;
@@ -1811,10 +1701,7 @@ inspector.addEventListener('click', (event) => {
   const data = element.widgetData;
   const widgetIndex = Number(event.target.closest('[data-widget-index]')?.dataset.widgetIndex);
   if (widgetAction === 'item' && (data.kind === 'characters' || data.kind === 'games') && data.items.length < 6) data.items.push({ id: EditorState.createId('item'), name: 'عنصر جديد', image: { url: 'https://celes.lol/assets/logo.png', position: 'center', fit: 'cover' } });
-  if (widgetAction === 'item' && data.kind === 'gallery' && data.items.length < 12) data.items.push({ id: EditorState.createId('item'), image: { url: 'https://celes.lol/assets/logo.png', position: 'center', fit: 'cover' }, caption: '' });
-  if (widgetAction === 'option' && data.kind === 'poll' && data.options.length < 4) data.options.push({ id: EditorState.createId('option'), label: 'خيار جديد' });
   if (widgetAction === 'remove-item' && Number.isInteger(widgetIndex) && Array.isArray(data.items) && data.items.length > 1) data.items.splice(widgetIndex, 1);
-  if (widgetAction === 'remove-option' && Number.isInteger(widgetIndex) && data.kind === 'poll' && data.options.length > 2) data.options.splice(widgetIndex, 1);
   commitChange();
 });
 deleteButton.addEventListener('click', deleteSelected);

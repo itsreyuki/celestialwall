@@ -13,17 +13,17 @@
 
 ## Proposed model
 
-- `celestia_pages`: one page per Discord user in V1. Fields: `id`, `user_id`, unique lowercase `slug`, `display_name`, `bio`, `visibility`, `published`, `published_at`, `views_count`, `reactions_enabled`, `guestbook_enabled`, `remix_enabled`, `entrance_enabled`, `config` JSONB, `created_at`, and `updated_at`.
+- `celestia_pages`: one page per Discord user in V1. Fields: `id`, `user_id`, unique lowercase `slug`, `display_name`, `bio`, `visibility`, `published`, `published_at`, `views_count`, `reactions_enabled`, `remix_enabled`, `entrance_enabled`, `config` JSONB, `created_at`, and `updated_at`.
 - `config` uses `configVersion: 1` and a strict server-side schema. It holds approved values only for background, profile card, avatar/banner assets, typography presets, social links, music, decorations, stickers, images, widgets, entrance, cursor, effects, tabs, mobile overrides, and layer order.
 - Initial limits: 24 total visual elements, 12 image assets, 12 links, 6 widgets, 5 tabs, 3 active effects, 500-character bio, 120-character display name, and 500-character text per element. Asset URLs must be server-issued Pages Storage URLs.
-- Reserve future tables only when their corresponding feature begins: `page_reactions`, `guestbook_entries`, and `page_remixes`. Keep lightweight atomic `views_count` updates only; do not add event-level analytics.
+- Keep queryable social data in `page_reactions` and `page_remixes`. Keep lightweight atomic `views_count` updates only; do not add event-level analytics.
 - Add Zod in the data-model phase solely for configuration validation and safe parsing; it substantially reduces bespoke validation code for this nested, versioned schema. Use JSDoc types in the current JavaScript codebase.
 
 ## Routing and components
 
 - Public page URLs are `celes.lol/{slug}`. Add an explicit one-segment public-page route before the existing catch-all. Reserve `api`, `auth`, `assets`, `vendor`, `uploads`, `music`, `health`, `pages`, and other system paths; reject these as slugs.
 - Dashboard/editor route: `/pages`; public renderer endpoint: `GET /api/pages/:slug`; authenticated owner endpoints: `GET/POST/PATCH /api/pages/me`; asset upload endpoint: `POST /api/pages/assets`.
-- Later social endpoints stay separate under `/api/pages/:slug/...` only when reactions, guestbook, or remix UI ships.
+- Social endpoints stay separate under `/api/pages/:slug/...` for reactions and remix operations.
 - Core client pieces: public renderer, authenticated editor/dashboard, controlled configuration form, asset picker/uploader, and shared page preview. No custom HTML, JavaScript, or free-form CSS is accepted.
 
 ## Delivery phases
@@ -32,7 +32,7 @@
 2. Authenticated page CRUD, slug protection, and secure Pages asset uploads.
 3. Editor/dashboard and live preview using preset-based customization controls.
 4. Public renderer at `/{slug}`, publishing/visibility, and atomic page-view counter.
-5. Optional social features: reactions, guestbook, and remixes.
+5. Optional social features: reactions and remixes.
 
 ## Risks and compatibility
 

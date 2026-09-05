@@ -33,18 +33,14 @@ function applyTextStyle(node, style, scale = 1) {
 function scaleWidget(node, element) {
   const scale = elementVisualScale(element);
   const mediaSize = Math.max(10, Math.round(48 * scale));
-  const gallerySize = Math.max(34, Math.round(76 * scale));
   node.style.fontSize = `${Math.round((element.style.fontSize || 11) * scale * 10) / 10}px`;
-  node.style.padding = element.widgetData?.kind === 'guestbook'
-    ? `${Math.round(Math.max(7, Math.min(12, 9 * scale)))}px`
-    : `${Math.round(Math.max(2, Math.min(36, 9 * scale)))}px`;
+  node.style.padding = `${Math.round(Math.max(2, Math.min(36, 9 * scale)))}px`;
   node.style.color = element.style.color || '';
   node.style.background = element.style.backgroundColor || '';
   node.style.borderRadius = `${element.style.borderRadius ?? 14}px`;
   node.style.boxShadow = element.style.shadow === 'strong' ? '0 14px 28px rgba(0,0,0,.5)' : (element.style.shadow === 'soft' ? '0 8px 18px rgba(0,0,0,.3)' : 'none');
   if (element.style.glow) node.style.boxShadow += ', 0 0 20px rgba(241,199,94,.45)';
   node.style.setProperty('--favorite-card-size', `${mediaSize}px`);
-  node.style.setProperty('--gallery-card-size', `${gallerySize}px`);
 }
 
 function fitDesignStage(layout, stage, mobile) {
@@ -136,30 +132,6 @@ function remixButton(page) {
   });
   node.append(button, count); return node;
 }
-function guestbookWidget(page, element) {
-  const node = document.createElement('section'); node.className = 'public-widget widget-guestbook'; node.setAttribute('aria-label', 'سجل الزوار');
-  const header = document.createElement('header'); header.className = 'guestbook-header';
-  const icon = document.createElement('span'); icon.className = 'guestbook-icon'; icon.textContent = '✦'; icon.setAttribute('aria-hidden', 'true');
-  const heading = document.createElement('span'); const title = document.createElement('strong'); title.textContent = 'سجل الزوار'; const subtitle = document.createElement('small'); subtitle.textContent = 'اترك أثرًا لطيفًا'; heading.append(title, subtitle); header.append(icon, heading);
-  const list = document.createElement('div'); list.className = 'guestbook-list'; list.setAttribute('aria-live', 'polite');
-  const loading = document.createElement('p'); loading.className = 'guestbook-loading'; loading.textContent = 'جاري تحميل الرسائل…'; list.append(loading);
-  const form = document.createElement('form'); const input = document.createElement('textarea'); input.maxLength = 500; input.rows = 2; input.placeholder = 'اكتب رسالة لطيفة…'; input.setAttribute('aria-label', 'رسالتك في سجل الزوار'); const submit = document.createElement('button'); submit.type = 'submit'; submit.textContent = 'إرسال ✦'; form.append(input, submit); node.append(header, list, form);
-  let cursor = null; let canManage = false;
-  const emptyState = () => { const empty = document.createElement('p'); empty.className = 'guestbook-empty'; empty.textContent = 'كن أول من يترك رسالة ✨'; return empty; };
-  const entryNode = (entry) => {
-    const card = document.createElement('article'); card.className = 'guestbook-entry'; if (entry.hidden) card.classList.add('is-hidden');
-    const entryHeader = document.createElement('header'); const avatar = document.createElement('span'); avatar.className = 'guestbook-avatar'; const authorName = entry.authorName || 'زائر'; avatar.textContent = authorName.trim().charAt(0).toUpperCase() || '✦';
-    const identity = document.createElement('span'); const author = document.createElement('strong'); author.textContent = authorName; const date = document.createElement('time'); date.dateTime = entry.createdAt; date.textContent = new Date(entry.createdAt).toLocaleDateString('ar', { day: 'numeric', month: 'short' }); identity.append(author, date); entryHeader.append(avatar, identity);
-    if (entry.pinned) { const pin = document.createElement('small'); pin.className = 'guestbook-pin'; pin.textContent = 'مثبت ✦'; entryHeader.append(pin); }
-    const content = document.createElement('p'); content.textContent = entry.content; card.append(entryHeader, content);
-    if (entry.ownerReply) { const reply = document.createElement('p'); reply.className = 'owner-reply'; reply.textContent = `رد صاحب الصفحة: ${entry.ownerReply}`; card.append(reply); }
-    if (canManage) { const controls = document.createElement('div'); controls.className = 'guestbook-controls'; ['pin', 'hide', 'reply', 'delete'].forEach((action) => { const control = document.createElement('button'); control.type = 'button'; control.textContent = action === 'pin' ? (entry.pinned ? 'إلغاء التثبيت' : 'تثبيت') : action === 'hide' ? (entry.hidden ? 'إظهار' : 'إخفاء') : action === 'delete' ? 'حذف' : 'رد'; control.addEventListener('click', async () => { const contentValue = action === 'reply' ? window.prompt('الرد', entry.ownerReply || '') : undefined; if (action === 'reply' && contentValue === null) return; try { const result = await publicRequest(`/api/pages/me/guestbook/${entry.id}`, { method: 'PATCH', body: JSON.stringify({ action, value: action === 'pin' ? !entry.pinned : action === 'hide' ? !entry.hidden : undefined, content: contentValue }) }); if (action === 'delete') { card.remove(); if (!list.querySelector('.guestbook-entry')) list.prepend(emptyState()); } else card.replaceWith(entryNode(result.entry)); } catch (error) { node.dataset.error = error.message; } }); controls.append(control); }); card.append(controls); }
-    return card;
-  };
-  const load = async (before = null, append = false) => { try { const query = before ? `?before=${encodeURIComponent(before)}` : ''; const data = await publicRequest(`/api/pages/${encodeURIComponent(page.slug)}/guestbook${query}`); canManage = data.canManage; cursor = data.nextCursor; const entries = data.entries.map(entryNode); if (!append) list.replaceChildren(...(entries.length ? entries : [emptyState()])); else { list.querySelector('.guestbook-empty')?.remove(); list.append(...entries); } if (cursor) { const more = document.createElement('button'); more.type = 'button'; more.className = 'guestbook-more'; more.textContent = 'عرض رسائل أقدم'; more.addEventListener('click', () => { more.remove(); load(cursor, true); }); list.append(more); } } catch { form.hidden = true; } };
-  form.addEventListener('submit', async (event) => { event.preventDefault(); const content = input.value.trim(); if (!content) return; submit.disabled = true; try { const data = await publicRequest(`/api/pages/${encodeURIComponent(page.slug)}/guestbook`, { method: 'POST', body: JSON.stringify({ content }) }); input.value = ''; list.querySelector('.guestbook-empty')?.remove(); list.prepend(entryNode(data.entry)); delete node.dataset.error; } catch (error) { node.dataset.error = error.message; } finally { submit.disabled = false; } });
-  if (!page.guestbookEnabled) return null; load(); return node;
-}
 function formatTime(seconds) { return Number.isFinite(seconds) ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}` : '0:00'; }
 function musicPlayer(config) {
   if (!config.enabled) return null;
@@ -197,22 +169,16 @@ function scaleMusicPlayer(player, element) {
 }
 function widgetNode(page, element) {
   const data = element.widgetData; const node = document.createElement('section'); node.className = `public-widget widget-${data.kind}`;
-  if (data.kind === 'quote') { const quote = document.createElement('blockquote'); quote.textContent = `“${data.text}”`; node.append(quote); if (data.author) { const author = document.createElement('cite'); author.textContent = `— ${data.author}`; node.append(author); } }
-  else if (data.kind === 'mood') node.textContent = `${data.icon || '✨'} ${data.text}`;
-  else if (data.kind === 'characters' || data.kind === 'games') { const list = document.createElement('div'); list.className = 'widget-favorites'; data.items.forEach((item) => { const card = document.createElement('figure'); const image = mediaElement(item.image, false, true); image.alt = item.name; const label = document.createElement('figcaption'); label.textContent = item.name; card.append(image, label); list.append(card); }); node.append(list); }
-  else if (data.kind === 'gallery') { const list = document.createElement('div'); list.className = `widget-gallery layout-${data.layout}`; data.items.forEach((item, index) => { const figure = document.createElement('figure'); const image = mediaElement(item.image, false, index > 2); image.alt = item.caption || ''; figure.append(image); if (item.caption) { const caption = document.createElement('figcaption'); caption.textContent = item.caption; figure.append(caption); } list.append(figure); }); node.append(list); }
+  if (data.kind === 'characters' || data.kind === 'games') { const list = document.createElement('div'); list.className = 'widget-favorites'; data.items.forEach((item) => { const card = document.createElement('figure'); const image = mediaElement(item.image, false, true); image.alt = item.name; const label = document.createElement('figcaption'); label.textContent = item.name; card.append(image, label); list.append(card); }); node.append(list); }
   else if (data.kind === 'counter') node.textContent = `${data.label}: ${page.viewsCount || 0}`;
   else if (data.kind === 'clock') { const icon = document.createElement('span'); icon.className = 'clock-icon'; icon.textContent = '✦'; icon.setAttribute('aria-hidden', 'true'); const face = document.createElement('span'); face.className = 'clock-face'; const time = document.createElement('time'); time.className = 'clock-time'; const date = document.createElement('span'); date.className = 'clock-date'; face.append(time, date); const update = () => { const now = new Date(); time.dateTime = now.toISOString(); time.textContent = new Intl.DateTimeFormat('ar', { hour: '2-digit', minute: '2-digit', second: data.showSeconds ? '2-digit' : undefined, hour12: data.format === '12h' }).format(now); date.textContent = new Intl.DateTimeFormat('ar', { weekday: 'long', day: 'numeric', month: 'long' }).format(now); }; update(); const interval = window.setInterval(update, data.showSeconds ? 1000 : 30000); const previous = widgetCleanup; widgetCleanup = () => { previous(); clearInterval(interval); }; node.append(icon, face); }
-  else if (data.kind === 'countdown') { const value = document.createElement('strong'); const update = () => { const difference = new Date(data.targetDate).getTime() - Date.now(); if (difference <= 0) value.textContent = data.finishedText || 'انتهى'; else { const total = Math.floor(difference / 1000); value.textContent = `${data.title}: ${Math.floor(total / 86400)}d ${Math.floor(total % 86400 / 3600)}h ${Math.floor(total % 3600 / 60)}m`; } }; update(); const interval = window.setInterval(update, 1000); const previous = widgetCleanup; widgetCleanup = () => { previous(); clearInterval(interval); }; node.append(value); }
-  else if (data.kind === 'poll') { const question = document.createElement('strong'); question.textContent = data.question; const key = `celestia-page-poll:${page.slug}:${element.id}`; const voted = window.localStorage.getItem(key); node.append(question); data.options.forEach((option) => { const button = document.createElement('button'); button.type = 'button'; button.textContent = option.label; button.disabled = Boolean(voted); button.addEventListener('click', () => { window.localStorage.setItem(key, option.id); node.querySelectorAll('button').forEach((item) => { item.disabled = true; }); }); node.append(button); }); }
-  else node.textContent = data.text;
   return node;
 }
 function renderElement(page, configuration, element) {
   const node = document.createElement('div');
   const typeClass = ['profile-card', 'widget'].includes(element.type) ? `public-${element.type}-element` : `public-${element.type}`;
   node.className = `public-element ${typeClass}`; if (element.type === 'image' && element.style.animation && element.style.animation !== 'none') node.classList.add(`image-animation-${element.style.animation}`); geometry(node, element);
-  if (element.type === 'profile-card') node.append(profileCard(page, configuration, element)); else if (element.type === 'text') node.append(textElement(element)); else if (element.type === 'social-links') node.append(socialLinks(configuration, element)); else if (element.type === 'image') { const image = mediaElement({ url: element.assetUrl, fit: element.style.objectFit || 'cover', position: element.style.objectPosition || 'center' }, false, element.position.y > 62); image.alt = element.name || ''; node.append(image); } else if (element.type === 'widget') { const widget = element.widgetData.kind === 'guestbook' ? guestbookWidget(page, element) : widgetNode(page, element); if (widget) { scaleWidget(widget, element); node.append(widget); } else node.hidden = true; } else if (element.type === 'music') { const player = musicPlayer(configuration.musicPlayer); if (player) { player.style.position = 'static'; player.style.width = '100%'; player.style.maxWidth = 'none'; player.style.height = '100%'; scaleMusicPlayer(player, element); node.append(player); } else node.append(text('Music Player')); } else { const sticker = document.createElement('span'); const fontSize = mobileViewport() && element.mobileOverrides?.fontSize !== undefined ? element.mobileOverrides.fontSize : (element.style.fontSize || 42); sticker.style.fontSize = `${fontSize}px`; sticker.textContent = element.content || '✨'; node.append(sticker); } return node;
+  if (element.type === 'profile-card') node.append(profileCard(page, configuration, element)); else if (element.type === 'text') node.append(textElement(element)); else if (element.type === 'social-links') node.append(socialLinks(configuration, element)); else if (element.type === 'image') { const image = mediaElement({ url: element.assetUrl, fit: element.style.objectFit || 'cover', position: element.style.objectPosition || 'center' }, false, element.position.y > 62); image.alt = element.name || ''; node.append(image); } else if (element.type === 'widget') { const widget = widgetNode(page, element); scaleWidget(widget, element); node.append(widget); } else if (element.type === 'music') { const player = musicPlayer(configuration.musicPlayer); if (player) { player.style.position = 'static'; player.style.width = '100%'; player.style.maxWidth = 'none'; player.style.height = '100%'; scaleMusicPlayer(player, element); node.append(player); } else node.append(text('Music Player')); } else { const sticker = document.createElement('span'); const fontSize = mobileViewport() && element.mobileOverrides?.fontSize !== undefined ? element.mobileOverrides.fontSize : (element.style.fontSize || 42); sticker.style.fontSize = `${fontSize}px`; sticker.textContent = element.content || '✨'; node.append(sticker); } return node;
 }
 function entranceScreen(configuration, onEnter) {
   const config = configuration.entranceScreen; if (!config.enabled) return null;

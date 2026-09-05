@@ -8,11 +8,9 @@ const PAGE_LIMITS = Object.freeze({
   socialLinks: 12,
   widgets: 6,
   tabs: 5,
-  galleryImages: 12,
   effects: 3,
   textLength: 500,
-  bioLength: 500,
-  guestbookLength: 500
+  bioLength: 500
 });
 
 const PAGE_UPLOAD_LIMITS = Object.freeze({
@@ -43,10 +41,10 @@ const PAGE_RATE_LIMITS = Object.freeze({
   theme: { max: 20, windowMs: 10 * 60 * 1000 },
   publish: { max: 20, windowMs: 10 * 60 * 1000 },
   reaction: { max: 30, windowMs: 60 * 1000 },
-  guestbook: { max: 3, windowMs: 5 * 60 * 1000 },
-  guestbookManage: { max: 30, windowMs: 60 * 1000 },
   remix: { max: 5, windowMs: 10 * 60 * 1000 }
 });
+
+const PAGE_WIDGET_TYPES = Object.freeze(['characters', 'games', 'counter', 'clock']);
 
 const SAFE_FONTS = ['Cairo', 'Space Grotesk', 'Arial', 'Georgia', 'Times New Roman', 'Verdana'];
 const PAGE_VISIBILITIES = ['public', 'unlisted', 'private'];
@@ -91,18 +89,11 @@ const widgetAssetSchema = z.object({
   crop: z.object({ x: percentageSchema, y: percentageSchema }).strict().optional()
 }).strict();
 const widgetItemSchema = z.object({ id: idSchema, name: z.string().trim().min(1).max(80), image: widgetAssetSchema }).strict();
-const galleryItemSchema = z.object({ id: idSchema, image: widgetAssetSchema, caption: z.string().trim().max(160).optional() }).strict();
 const widgetDataSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('quote'), text: z.string().trim().min(1).max(280), author: z.string().trim().max(80) }).strict(),
-  z.object({ kind: z.literal('mood'), text: z.string().trim().min(1).max(100), icon: z.string().trim().max(12) }).strict(),
   z.object({ kind: z.literal('characters'), items: z.array(widgetItemSchema).min(1).max(6) }).strict(),
   z.object({ kind: z.literal('games'), items: z.array(widgetItemSchema).min(1).max(6) }).strict(),
-  z.object({ kind: z.literal('gallery'), items: z.array(galleryItemSchema).min(1).max(PAGE_LIMITS.galleryImages), layout: z.enum(['grid', 'polaroid', 'masonry']) }).strict(),
   z.object({ kind: z.literal('counter'), label: z.string().trim().min(1).max(40) }).strict(),
-  z.object({ kind: z.literal('clock'), format: z.enum(['12h', '24h']), showSeconds: z.boolean() }).strict(),
-  z.object({ kind: z.literal('countdown'), title: z.string().trim().min(1).max(80), targetDate: z.string().datetime({ offset: true }), finishedText: z.string().trim().max(80) }).strict(),
-  z.object({ kind: z.literal('poll'), question: z.string().trim().min(1).max(180), options: z.array(z.object({ id: idSchema, label: z.string().trim().min(1).max(80) }).strict()).min(2).max(4) }).strict(),
-  z.object({ kind: z.literal('guestbook'), text: z.string().trim().min(1).max(180) }).strict()
+  z.object({ kind: z.literal('clock'), format: z.enum(['12h', '24h']), showSeconds: z.boolean() }).strict()
 ]);
 
 const socialLinkSchema = z.object({
@@ -173,7 +164,7 @@ const pageElementSchema = z.object({
   content: z.string().max(PAGE_LIMITS.textLength).optional(),
   assetUrl: urlSchema.optional(),
   links: z.array(socialLinkSchema).max(PAGE_LIMITS.socialLinks).optional(),
-  widget: z.enum(['quote', 'mood', 'characters', 'games', 'gallery', 'counter', 'clock', 'countdown', 'poll', 'guestbook']).optional(),
+  widget: z.enum(PAGE_WIDGET_TYPES).optional(),
   widgetData: widgetDataSchema.optional()
 }).strict().superRefine((element, context) => {
   if (element.type === 'image' && !element.assetUrl) {
@@ -270,7 +261,6 @@ const pageConfigurationSchema = z.object({
     link: textStyleSchema
   }).strict(),
   socialLinks: z.array(socialLinkSchema).max(PAGE_LIMITS.socialLinks),
-  galleryImages: z.array(assetSchema).max(PAGE_LIMITS.galleryImages),
   elements: z.array(pageElementSchema).max(PAGE_LIMITS.elements),
   musicPlayer: z.object({
     enabled: z.boolean(),
@@ -313,10 +303,10 @@ const pageConfigurationSchema = z.object({
   }, {});
   const widgetImageCount = configuration.elements.reduce((total, element) => {
     if (element.type !== 'widget') return total;
-    if (['characters', 'games', 'gallery'].includes(element.widgetData.kind)) return total + element.widgetData.items.length;
+    if (['characters', 'games'].includes(element.widgetData.kind)) return total + element.widgetData.items.length;
     return total;
   }, 0);
-  const imageCount = (counts.image || 0) + configuration.galleryImages.length + widgetImageCount;
+  const imageCount = (counts.image || 0) + widgetImageCount;
 
   if (imageCount > PAGE_LIMITS.images) {
     context.addIssue({ code: z.ZodIssueCode.custom, message: `A page can contain at most ${PAGE_LIMITS.images} images.`, path: ['elements'] });
@@ -346,7 +336,6 @@ const pageInputSchema = z.object({
   visibility: z.enum(PAGE_VISIBILITIES).default('private'),
   published: z.boolean().default(false),
   reactionsEnabled: z.boolean().default(true),
-  guestbookEnabled: z.boolean().default(false),
   remixEnabled: z.boolean().default(false),
   entranceEnabled: z.boolean().default(false),
   configuration: pageConfigurationSchema
@@ -365,7 +354,6 @@ function createDefaultPageConfiguration() {
       link: { fontFamily: 'Space Grotesk', fontSize: 15, fontWeight: '600', color: '#f5ce6b', textAlign: 'center', letterSpacing: 0, lineHeight: 1.4, effect: 'none' }
     },
     socialLinks: [],
-    galleryImages: [],
     elements: [{
       id: 'profile-card',
       type: 'profile-card',
@@ -403,6 +391,7 @@ module.exports = {
   PAGE_UPLOAD_LIMITS,
   PAGE_ASSET_TYPES,
   PAGE_RATE_LIMITS,
+  PAGE_WIDGET_TYPES,
   PAGE_VISIBILITIES,
   SOCIAL_ICON_IDS,
   RESERVED_SLUGS,
